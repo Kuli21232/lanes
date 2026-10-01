@@ -390,6 +390,16 @@ pub fn stop(path: &Path) -> Result<Lane> {
 mod tests {
     use super::*;
 
+    fn run_git(path: &Path, args: &[&str]) {
+        let status = Command::new("git")
+            .arg("-C")
+            .arg(path)
+            .args(args)
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {args:?} failed");
+    }
+
     #[test]
     fn allocation_skips_reserved_and_busy_ports() {
         let listener = TcpListener::bind(("127.0.0.1", FIRST_PORT)).unwrap();
@@ -407,5 +417,49 @@ mod tests {
         };
         assert_eq!(choose_port(&registry, None).unwrap(), FIRST_PORT + 2);
         drop(listener);
+    }
+
+    #[test]
+    fn two_worktrees_get_distinct_stable_ports() {
+        let temporary = tempfile::tempdir().unwrap();
+        let repository = temporary.path().join("shop");
+        let feature = temporary.path().join("shop-auth");
+        fs::create_dir(&repository).unwrap();
+        run_git(&repository, &["init", "-b", "main"]);
+        fs::write(repository.join("README.md"), "shop").unwrap();
+        run_git(&repository, &["add", "."]);
+        run_git(
+            &repository,
+            &[
+                "-c",
+                "user.name=Lanes Test",
+                "-c",
+                "user.email=lanes@example.com",
+                "commit",
+                "-m",
+                "initial",
+            ],
+        );
+        run_git(
+            &repository,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "feature/auth",
+                feature.to_str().unwrap(),
+            ],
+        );
+
+        std::env::set_var("LANES_HOME", temporary.path().join("data"));
+        let first = discover(&repository).unwrap();
+        assert_eq!(first.len(), 2);
+        assert_ne!(first[0].port, first[1].port);
+        let second = discover(&repository).unwrap();
+        assert_eq!(
+            first.iter().map(|lane| lane.port).collect::<Vec<_>>(),
+            second.iter().map(|lane| lane.port).collect::<Vec<_>>()
+        );
+        std::env::remove_var("LANES_HOME");
     }
 }
