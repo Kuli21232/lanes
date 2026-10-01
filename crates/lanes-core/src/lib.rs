@@ -75,7 +75,11 @@ impl RegistryGuard {
         } else {
             Registry::default()
         };
-        Ok(Self { _lock: lock, path, data })
+        Ok(Self {
+            _lock: lock,
+            path,
+            data,
+        })
     }
 
     fn save(&self) -> Result<()> {
@@ -98,32 +102,53 @@ pub fn data_dir() -> Result<PathBuf> {
     if let Some(path) = std::env::var_os("LANES_HOME") {
         return Ok(PathBuf::from(path));
     }
-    let base = dirs::data_local_dir().ok_or_else(|| io::Error::other("cannot find user data directory"))?;
+    let base = dirs::data_local_dir()
+        .ok_or_else(|| io::Error::other("cannot find user data directory"))?;
     Ok(base.join("Lanes"))
 }
 
 fn git(path: &Path, args: &[&str]) -> Result<String> {
-    let output = Command::new("git").arg("-C").arg(path).args(args).output()?;
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(path)
+        .args(args)
+        .output()?;
     if !output.status.success() {
         return Err(io::Error::other(format!(
             "git {} failed: {}",
             args.join(" "),
             String::from_utf8_lossy(&output.stderr).trim()
-        )).into());
+        ))
+        .into());
     }
     Ok(String::from_utf8(output.stdout)?.trim().to_owned())
 }
 
 pub fn detect(path: &Path) -> Result<Worktree> {
     let root = PathBuf::from(git(path, &["rev-parse", "--show-toplevel"])?).canonicalize()?;
-    let common_dir = PathBuf::from(git(&root, &["rev-parse", "--path-format=absolute", "--git-common-dir"])?).canonicalize()?;
+    let common_dir = PathBuf::from(git(
+        &root,
+        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    )?)
+    .canonicalize()?;
     let branch = git(&root, &["symbolic-ref", "--quiet", "--short", "HEAD"])
         .or_else(|_| git(&root, &["rev-parse", "--short", "HEAD"]))?;
-    let repository = common_dir.parent()
+    let repository = common_dir
+        .parent()
         .and_then(Path::file_name)
         .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| root.file_name().unwrap_or_default().to_string_lossy().into_owned());
-    Ok(Worktree { path: root, repository, common_dir, branch })
+        .unwrap_or_else(|| {
+            root.file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned()
+        });
+    Ok(Worktree {
+        path: root,
+        repository,
+        common_dir,
+        branch,
+    })
 }
 
 pub fn worktrees(path: &Path) -> Result<Vec<Worktree>> {
@@ -141,9 +166,14 @@ pub fn worktrees(path: &Path) -> Result<Vec<Worktree>> {
 
 fn same_path(a: &Path, b: &Path) -> bool {
     #[cfg(windows)]
-    { a.to_string_lossy().eq_ignore_ascii_case(&b.to_string_lossy()) }
+    {
+        a.to_string_lossy()
+            .eq_ignore_ascii_case(&b.to_string_lossy())
+    }
     #[cfg(not(windows))]
-    { a == b }
+    {
+        a == b
+    }
 }
 
 fn port_available(port: u16) -> bool {
@@ -151,7 +181,9 @@ fn port_available(port: u16) -> bool {
 }
 
 fn choose_port(registry: &Registry, current: Option<&Path>) -> Result<u16> {
-    let reserved: HashSet<u16> = registry.lanes.iter()
+    let reserved: HashSet<u16> = registry
+        .lanes
+        .iter()
         .filter(|lane| current.is_none_or(|path| !same_path(&lane.path, path)))
         .map(|lane| lane.port)
         .collect();
@@ -161,7 +193,11 @@ fn choose_port(registry: &Registry, current: Option<&Path>) -> Result<u16> {
 }
 
 fn upsert(registry: &mut Registry, worktree: &Worktree) -> Result<usize> {
-    if let Some(index) = registry.lanes.iter().position(|lane| same_path(&lane.path, &worktree.path)) {
+    if let Some(index) = registry
+        .lanes
+        .iter()
+        .position(|lane| same_path(&lane.path, &worktree.path))
+    {
         let lane = &mut registry.lanes[index];
         lane.branch = worktree.branch.clone();
         lane.repository = worktree.repository.clone();
@@ -206,9 +242,13 @@ pub fn all_lanes() -> Result<Vec<Lane>> {
 }
 
 pub fn process_alive(lane: &Lane) -> bool {
-    let (Some(pid), Some(start)) = (lane.pid, lane.process_started) else { return false; };
+    let (Some(pid), Some(start)) = (lane.pid, lane.process_started) else {
+        return false;
+    };
     let system = System::new_all();
-    system.process(Pid::from_u32(pid)).is_some_and(|process| process.start_time() == start)
+    system
+        .process(Pid::from_u32(pid))
+        .is_some_and(|process| process.start_time() == start)
 }
 
 fn process_start(pid: u32) -> Option<u64> {
@@ -231,11 +271,17 @@ fn build_command(args: &[String], worktree: &Worktree, port: u16) -> Result<Comm
         // npm, pnpm and other Windows package managers are .cmd shims.
         let mut shell = Command::new("cmd");
         shell.arg("/D").arg("/S").arg("/C");
-        let line = args.iter().map(|arg| {
-            if arg.contains([' ', '\t', '"']) {
-                format!("\"{}\"", arg.replace('"', "\"\""))
-            } else { arg.clone() }
-        }).collect::<Vec<_>>().join(" ");
+        let line = args
+            .iter()
+            .map(|arg| {
+                if arg.contains([' ', '\t', '"']) {
+                    format!("\"{}\"", arg.replace('"', "\"\""))
+                } else {
+                    arg.clone()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
         shell.arg(line);
         shell
     };
@@ -245,7 +291,8 @@ fn build_command(args: &[String], worktree: &Worktree, port: u16) -> Result<Comm
         process.args(&args[1..]);
         process
     };
-    command.current_dir(&worktree.path)
+    command
+        .current_dir(&worktree.path)
         .env("PORT", port.to_string())
         .env("LANE_PORT", port.to_string())
         .env("LANE", worktree.branch.replace('/', "-"))
@@ -258,7 +305,12 @@ pub fn launch(worktree: &Worktree, args: &[String], foreground: bool) -> Result<
     let index = upsert(&mut registry.data, worktree)?;
     let old = &registry.data.lanes[index];
     if process_alive(old) {
-        return Err(io::Error::other(format!("{} is already running at {}", old.branch, old.url())).into());
+        return Err(io::Error::other(format!(
+            "{} is already running at {}",
+            old.branch,
+            old.url()
+        ))
+        .into());
     }
     if !port_available(old.port) {
         let replacement = choose_port(&registry.data, Some(&worktree.path))?;
@@ -267,11 +319,17 @@ pub fn launch(worktree: &Worktree, args: &[String], foreground: bool) -> Result<
     let port = registry.data.lanes[index].port;
     let mut command = build_command(args, worktree, port)?;
     if foreground {
-        command.stdin(Stdio::inherit()).stdout(Stdio::inherit()).stderr(Stdio::inherit());
+        command
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit());
     } else {
         let log = data_dir()?.join(format!("lane-{port}.log"));
         let output = File::create(log)?;
-        command.stdin(Stdio::null()).stdout(Stdio::from(output.try_clone()?)).stderr(Stdio::from(output));
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::from(output.try_clone()?))
+            .stderr(Stdio::from(output));
     }
     let child = command.spawn()?;
     let lane = &mut registry.data.lanes[index];
@@ -284,7 +342,12 @@ pub fn launch(worktree: &Worktree, args: &[String], foreground: bool) -> Result<
 
 pub fn finish(path: &Path, pid: u32) -> Result<()> {
     let mut registry = RegistryGuard::open()?;
-    if let Some(lane) = registry.data.lanes.iter_mut().find(|lane| same_path(&lane.path, path)) {
+    if let Some(lane) = registry
+        .data
+        .lanes
+        .iter_mut()
+        .find(|lane| same_path(&lane.path, path))
+    {
         if lane.pid == Some(pid) {
             lane.pid = None;
             lane.process_started = None;
@@ -296,15 +359,22 @@ pub fn finish(path: &Path, pid: u32) -> Result<()> {
 
 pub fn stop(path: &Path) -> Result<Lane> {
     let mut registry = RegistryGuard::open()?;
-    let lane = registry.data.lanes.iter_mut()
+    let lane = registry
+        .data
+        .lanes
+        .iter_mut()
         .find(|lane| same_path(&lane.path, path))
         .ok_or_else(|| io::Error::other("worktree has no lane"))?;
     if process_alive(lane) {
         let pid = lane.pid.expect("live lane has a pid");
         #[cfg(windows)]
-        let status = Command::new("taskkill").args(["/PID", &pid.to_string(), "/T", "/F"]).status()?;
+        let status = Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .status()?;
         #[cfg(not(windows))]
-        let status = Command::new("kill").args(["-TERM", &pid.to_string()]).status()?;
+        let status = Command::new("kill")
+            .args(["-TERM", &pid.to_string()])
+            .status()?;
         if !status.success() {
             return Err(io::Error::other(format!("failed to stop process {pid}")).into());
         }
@@ -323,11 +393,18 @@ mod tests {
     #[test]
     fn allocation_skips_reserved_and_busy_ports() {
         let listener = TcpListener::bind(("127.0.0.1", FIRST_PORT)).unwrap();
-        let registry = Registry { lanes: vec![Lane {
-            path: PathBuf::from("reserved"), repository: String::new(),
-            common_dir: PathBuf::new(), branch: String::new(), port: FIRST_PORT + 1,
-            pid: None, process_started: None, command: vec![],
-        }] };
+        let registry = Registry {
+            lanes: vec![Lane {
+                path: PathBuf::from("reserved"),
+                repository: String::new(),
+                common_dir: PathBuf::new(),
+                branch: String::new(),
+                port: FIRST_PORT + 1,
+                pid: None,
+                process_started: None,
+                command: vec![],
+            }],
+        };
         assert_eq!(choose_port(&registry, None).unwrap(), FIRST_PORT + 2);
         drop(listener);
     }

@@ -13,23 +13,51 @@ fn real_main() -> Result<i32> {
         "run" => {
             let worktree = detect(&cwd)?;
             let mut command: Vec<String> = args.collect();
-            if command.first().is_some_and(|value| value == "--") { command.remove(0); }
-            if command.is_empty() { command = vec!["npm".into(), "run".into(), "dev".into()]; }
+            if command.first().is_some_and(|value| value == "--") {
+                command.remove(0);
+            }
+            if command.is_empty() {
+                command = vec!["npm".into(), "run".into(), "dev".into()];
+            }
             let (lane, mut child) = launch(&worktree, &command, true)?;
-            println!("\nLANES  {} · {}\nPORT={}  {}\n", lane.repository, lane.branch, lane.port, lane.url());
+            println!(
+                "\nLANES  {} · {}\nPORT={}  {}\n",
+                lane.repository,
+                lane.branch,
+                lane.port,
+                lane.url()
+            );
             let code = child.wait()?.code().unwrap_or(1);
             finish(&lane.path, child.id())?;
             Ok(code)
         }
         "status" => {
-            let lanes = if detect(&cwd).is_ok() { discover(&cwd)? } else { all_lanes()? };
-            if lanes.is_empty() { println!("No lanes yet. Run `lanes run` in a Git worktree."); }
-            else {
+            let lanes = if detect(&cwd).is_ok() {
+                discover(&cwd)?
+            } else {
+                all_lanes()?
+            };
+            if lanes.is_empty() {
+                println!("No lanes yet. Run `lanes run` in a Git worktree.");
+            } else {
                 println!("LANES\n");
                 for lane in &lanes {
-                    println!("{:<24} {:<23} {}", lane.branch, lane.url(), if process_alive(lane) { "● running" } else { "○ stopped" });
+                    println!(
+                        "{:<24} {:<23} {}",
+                        lane.branch,
+                        lane.url(),
+                        if process_alive(lane) {
+                            "● running"
+                        } else {
+                            "○ stopped"
+                        }
+                    );
                 }
-                println!("\n{} worktrees · {} running", lanes.len(), lanes.iter().filter(|lane| process_alive(lane)).count());
+                println!(
+                    "\n{} worktrees · {} running",
+                    lanes.len(),
+                    lanes.iter().filter(|lane| process_alive(lane)).count()
+                );
             }
             Ok(0)
         }
@@ -38,8 +66,14 @@ fn real_main() -> Result<i32> {
             println!("Stopped {} ({})", lane.branch, lane.url());
             Ok(0)
         }
-        "help" | "--help" | "-h" => { usage(); Ok(0) }
-        _ => { usage(); Err(std::io::Error::other(format!("unknown command: {action}")).into()) }
+        "help" | "--help" | "-h" => {
+            usage();
+            Ok(0)
+        }
+        _ => {
+            usage();
+            Err(std::io::Error::other(format!("unknown command: {action}")).into())
+        }
     }
 }
 
