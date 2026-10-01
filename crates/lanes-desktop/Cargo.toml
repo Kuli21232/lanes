@@ -8,7 +8,7 @@ build = "build.rs"
 
 [dependencies]
 lanes-core = { path = "../lanes-core" }
-slint = "=1.17.1"
+slint = { version = "=1.17.1", default-features = false, features = ["std", "backend-winit", "backend-winit-x11", "backend-winit-wayland", "renderer-software", "compat-1-2"] }
 shell-words = "1.1"
 
 [build-dependencies]
