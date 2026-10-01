@@ -9,6 +9,7 @@ build = "build.rs"
 [dependencies]
 lanes-core = { path = "../lanes-core" }
 slint = "=1.17.1"
+shell-words = "1.1"
 
 [build-dependencies]
 slint-build = "=1.17.1"

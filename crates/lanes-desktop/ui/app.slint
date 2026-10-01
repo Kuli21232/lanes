@@ -1,0 +1,165 @@
+import { LineEdit, ScrollView } from "std-widgets.slint";
+
+export struct LaneRow {
+    branch: string,
+    url: string,
+    state: string,
+    path: string,
+    port: string,
+}
+
+export component AppWindow inherits Window {
+    title: "Lanes";
+    width: 1120px;
+    height: 720px;
+    min-width: 850px;
+    min-height: 560px;
+    background: #0d1117;
+
+    in-out property <[LaneRow]> lanes;
+    in-out property <string> project-path;
+    in-out property <string> command-text: "npm run dev";
+    in-out property <string> message: "Ready";
+    callback refresh();
+    callback run-lane(string);
+    callback stop-lane(string);
+
+    HorizontalLayout {
+        spacing: 0px;
+
+        Rectangle {
+            width: 224px;
+            background: #161b22;
+            border-width: 1px;
+            border-color: #30363d;
+            VerticalLayout {
+                padding: 24px;
+                spacing: 20px;
+                Text { text: "◈  LANES"; color: #f0f6fc; font-size: 22px; font-weight: 800; }
+                Rectangle { height: 1px; background: #30363d; }
+                Text { text: "WORKSPACE"; color: #8b949e; font-size: 11px; font-weight: 700; }
+                Rectangle {
+                    height: 42px;
+                    background: #1f6feb;
+                    border-radius: 7px;
+                    Text { text: "▤   Worktrees"; color: white; font-size: 14px; vertical-alignment: center; x: 14px; }
+                }
+                Text { text: "Run every branch."; color: #8b949e; font-size: 13px; }
+                Text { text: "No port collisions."; color: #8b949e; font-size: 13px; }
+                Rectangle { vertical-stretch: 1; background: transparent; }
+                Text { text: "Native Rust + Slint"; color: #6e7681; font-size: 11px; }
+            }
+        }
+
+        VerticalLayout {
+            padding: 30px;
+            spacing: 18px;
+            HorizontalLayout {
+                spacing: 12px;
+                VerticalLayout {
+                    spacing: 4px;
+                    Text { text: "Worktrees"; color: #f0f6fc; font-size: 28px; font-weight: 700; }
+                    Text { text: "Stable local URLs for every branch"; color: #8b949e; font-size: 13px; }
+                }
+                Rectangle { horizontal-stretch: 1; background: transparent; }
+                Rectangle {
+                    width: 104px;
+                    height: 36px;
+                    background: #21262d;
+                    border-width: 1px;
+                    border-color: #30363d;
+                    border-radius: 6px;
+                    Text { text: "↻  Refresh"; color: #c9d1d9; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                    TouchArea { clicked => { root.refresh(); } }
+                }
+            }
+
+            Rectangle {
+                height: 112px;
+                background: #161b22;
+                border-width: 1px;
+                border-color: #30363d;
+                border-radius: 8px;
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 7px;
+                    Text { text: "PROJECT DIRECTORY"; color: #8b949e; font-size: 11px; font-weight: 700; }
+                    LineEdit { text <=> root.project-path; height: 34px; }
+                    Text { text: "Enter any path inside a Git repository to discover its worktrees."; color: #8b949e; font-size: 11px; }
+                }
+            }
+
+            Rectangle {
+                height: 94px;
+                background: #161b22;
+                border-width: 1px;
+                border-color: #30363d;
+                border-radius: 8px;
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 8px;
+                    Text { text: "RUN COMMAND"; color: #8b949e; font-size: 11px; font-weight: 700; }
+                    LineEdit { text <=> root.command-text; height: 34px; }
+                }
+            }
+
+            Text { text: "LANES  ·  " + root.lanes.length; color: #8b949e; font-size: 12px; font-weight: 700; }
+            Rectangle {
+                background: #161b22;
+                border-width: 1px;
+                border-color: #30363d;
+                border-radius: 8px;
+                vertical-stretch: 1;
+                VerticalLayout {
+                    spacing: 0px;
+                    Rectangle {
+                        height: 42px;
+                        background: #21262d;
+                        HorizontalLayout {
+                            padding-left: 18px;
+                            padding-right: 18px;
+                            spacing: 12px;
+                            Text { text: "BRANCH"; color: #8b949e; font-size: 11px; font-weight: 700; horizontal-stretch: 2; vertical-alignment: center; }
+                            Text { text: "LOCAL URL"; color: #8b949e; font-size: 11px; font-weight: 700; horizontal-stretch: 2; vertical-alignment: center; }
+                            Text { text: "STATUS"; color: #8b949e; font-size: 11px; font-weight: 700; horizontal-stretch: 1; vertical-alignment: center; }
+                            Rectangle { width: 126px; background: transparent; }
+                        }
+                    }
+                    ScrollView {
+                        vertical-stretch: 1;
+                        VerticalLayout {
+                            spacing: 0px;
+                            for lane in root.lanes: Rectangle {
+                                height: 56px;
+                                background: #161b22;
+                                border-width: 1px;
+                                border-color: #21262d;
+                                HorizontalLayout {
+                                    padding-left: 18px;
+                                    padding-right: 18px;
+                                    spacing: 12px;
+                                    Text { text: "⑂  " + lane.branch; color: #f0f6fc; font-size: 13px; font-weight: 600; horizontal-stretch: 2; vertical-alignment: center; overflow: elide; }
+                                    Text { text: lane.url; color: #58a6ff; font-size: 13px; horizontal-stretch: 2; vertical-alignment: center; }
+                                    Text { text: lane.state; color: lane.state == "● running" ? #3fb950 : #8b949e; font-size: 12px; horizontal-stretch: 1; vertical-alignment: center; }
+                                    Rectangle {
+                                        width: 58px; height: 28px;
+                                        background: #238636; border-radius: 5px;
+                                        Text { text: "Run"; color: white; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                                        TouchArea { clicked => { root.run-lane(lane.path); } }
+                                    }
+                                    Rectangle {
+                                        width: 58px; height: 28px;
+                                        background: #30363d; border-radius: 5px;
+                                        Text { text: "Stop"; color: #c9d1d9; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                                        TouchArea { clicked => { root.stop-lane(lane.path); } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Text { text: root.message; color: #8b949e; font-size: 12px; }
+        }
+    }
+}
