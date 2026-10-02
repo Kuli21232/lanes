@@ -2,7 +2,16 @@
 
 **Run every branch. No port collisions.**
 
-Four Git worktrees. Four development servers. One default port. Lanes gives each worktree a stable local port and passes it to the command you run.
+Four Git worktrees. Four branches. One default port. What could possibly go wrong?
+
+```text
+Before Lanes              After Lanes
+main      → :3000          main      → :4300
+auth      → :3000 ✗        auth      → :4301
+payments  → :3000 ✗        payments  → :4302
+```
+
+Lanes gives each worktree a stable local port and passes it to the command you run.
 
 ```text
 $ lanes run npm run dev

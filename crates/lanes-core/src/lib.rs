@@ -88,11 +88,8 @@ impl RegistryGuard {
         serde_json::to_writer_pretty(&mut file, &self.data)?;
         file.write_all(b"\n")?;
         file.sync_all()?;
-        // Windows cannot rename over an existing file. The separate lock keeps
-        // all Lanes readers and writers out of the short replacement window.
-        if self.path.exists() {
-            fs::remove_file(&self.path)?;
-        }
+        // The separate lock serializes all Lanes readers and writers while the
+        // temporary file is atomically moved into place.
         fs::rename(temporary, &self.path)?;
         Ok(())
     }
