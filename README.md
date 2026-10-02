@@ -25,7 +25,9 @@ feature/payments         http://localhost:4302   ○ stopped
 
 ## Install
 
-Requires Git and a [Rust toolchain](https://rustup.rs/). On Windows, Rust also needs the Visual Studio C++ build tools.
+Download the CLI and native desktop app from [Releases](https://github.com/Kuli21232/lanes/releases). The Windows archive contains `lanes.exe` and `lanes-desktop.exe`; the Linux archive contains `lanes` and `lanes-desktop`.
+
+To build from source, install Git and a [Rust toolchain](https://rustup.rs/). On Windows, Rust also needs the Visual Studio C++ build tools.
 
 ```sh
 cargo install --git https://github.com/Kuli21232/lanes --package lanes-core

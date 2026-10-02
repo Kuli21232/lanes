@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "Lanes $GITHUB_REF_NAME"
+
+  binaries:
+    needs: prepare
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            archive: lanes-windows-x64.zip
+          - os: ubuntu-latest
+            archive: lanes-linux-x64.tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux UI dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxcb1-dev libfontconfig1-dev libfreetype6-dev
+      - run: cargo build --release -p lanes-core -p lanes-desktop
+      - name: Package Windows binaries
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path target/release/lanes.exe,target/release/lanes-desktop.exe -DestinationPath "${{ matrix.archive }}"
+      - name: Package Linux binaries
+        if: runner.os == 'Linux'
+        run: tar -C target/release -czf "${{ matrix.archive }}" lanes lanes-desktop
+      - name: Upload binary archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: gh release upload "$GITHUB_REF_NAME" "${{ matrix.archive }}" --clobber
