@@ -2,15 +2,51 @@
 
 slint::include_modules!();
 
-use lanes_core::{data_dir, detect, discover, finish, launch, process_alive, stop, Lane, Result};
+use lanes_core::{data_dir, detect, discover, finish, launch, processes_alive, stop, Lane, Result};
 use slint::{ModelRc, Timer, TimerMode, VecModel};
 use std::fs::{self, File};
 use std::io::{ErrorKind, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Duration;
 
 const LOG_TAIL_BYTES: u64 = 64 * 1024;
 const LAST_PROJECT_FILE: &str = "desktop-project.txt";
+
+enum Task {
+    Refresh {
+        project: String,
+        announce: bool,
+    },
+    Run {
+        project: String,
+        path: String,
+        command: String,
+    },
+    Stop {
+        project: String,
+        path: String,
+    },
+}
+
+enum Event {
+    Refreshed {
+        project: String,
+        announce: bool,
+        result: Result<LoadedProject>,
+    },
+    Action {
+        project: String,
+        message: String,
+        has_error: bool,
+        result: Result<LoadedProject>,
+    },
+}
+
+struct LoadedProject {
+    lanes: Vec<(Lane, bool)>,
+    save_error: Option<String>,
+}
 
 fn remembered_project() -> Option<PathBuf> {
     let path = PathBuf::from(fs::read_to_string(data_dir().ok()?.join(LAST_PROJECT_FILE)).ok()?);
@@ -39,57 +75,125 @@ fn remember_project(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn refresh(ui: &AppWindow, announce: bool) {
-    let path = ui.get_project_path().to_string();
-    if path.trim().is_empty() {
-        ui.set_lanes(ModelRc::new(VecModel::default()));
-        ui.set_summary("No worktrees loaded".into());
-        ui.set_message("Choose a Git repository to get started".into());
-        ui.set_has_error(false);
-        return;
+fn clear_project(ui: &AppWindow) {
+    ui.set_lanes(ModelRc::new(VecModel::default()));
+    ui.set_summary("No worktrees loaded".into());
+    ui.set_message("Choose a Git repository to get started".into());
+    ui.set_has_error(false);
+}
+
+fn request_refresh(ui: &AppWindow, tasks: &Sender<Task>, announce: bool) {
+    let project = ui.get_project_path().to_string();
+    if project.trim().is_empty() {
+        clear_project(ui);
+    } else {
+        if announce {
+            ui.set_message("Refreshing worktrees...".into());
+            ui.set_has_error(false);
+        }
+        let _ = tasks.send(Task::Refresh { project, announce });
     }
-    match discover(Path::new(&path)) {
-        Ok(lanes) => {
-            let mut running = 0;
-            let rows = lanes
-                .iter()
-                .map(|lane| {
-                    let is_running = process_alive(lane);
-                    running += usize::from(is_running);
-                    LaneRow {
-                        branch: lane.branch.clone().into(),
-                        url: lane.url().into(),
-                        running: is_running,
-                        path: lane.path.to_string_lossy().into_owned().into(),
-                        port: lane.port.into(),
-                    }
+}
+
+fn load_project(project: &str, remember: bool) -> Result<LoadedProject> {
+    let lanes = discover(Path::new(project))?;
+    let running = processes_alive(&lanes);
+    let lanes = lanes.into_iter().zip(running).collect();
+    let save_error = if remember {
+        remember_project(Path::new(project))
+            .err()
+            .map(|error| error.to_string())
+    } else {
+        None
+    };
+    Ok(LoadedProject { lanes, save_error })
+}
+
+fn apply_loaded(ui: &AppWindow, project: &str, result: Result<LoadedProject>) -> bool {
+    if ui.get_project_path().as_str() != project {
+        return false;
+    }
+    if project.trim().is_empty() {
+        clear_project(ui);
+        return false;
+    }
+    match result {
+        Ok(loaded) => {
+            let running = loaded.lanes.iter().filter(|(_, active)| *active).count();
+            let count = loaded.lanes.len();
+            let rows = loaded
+                .lanes
+                .into_iter()
+                .map(|(lane, active)| LaneRow {
+                    branch: lane.branch.clone().into(),
+                    url: lane.url().into(),
+                    running: active,
+                    path: lane.path.to_string_lossy().into_owned().into(),
+                    port: lane.port.into(),
                 })
                 .collect::<Vec<_>>();
             ui.set_lanes(ModelRc::new(VecModel::from(rows)));
-            ui.set_summary(format!("{} worktrees  ·  {running} running", lanes.len()).into());
-            if announce {
-                match remember_project(Path::new(&path)) {
-                    Ok(()) => {
-                        ui.set_message("Worktrees refreshed".into());
-                        ui.set_has_error(false);
-                    }
-                    Err(error) => {
-                        ui.set_message(
-                            format!("Worktrees loaded, but folder was not saved: {error}").into(),
-                        );
-                        ui.set_has_error(true);
-                    }
-                }
-            } else if ui.get_message().starts_with("Could not load worktrees:") {
-                ui.set_message("Ready".into());
-                ui.set_has_error(false);
+            ui.set_summary(format!("{count} worktrees  ·  {running} running").into());
+            if let Some(error) = loaded.save_error {
+                ui.set_message(
+                    format!("Worktrees loaded, but folder was not saved: {error}").into(),
+                );
+                ui.set_has_error(true);
+                return false;
             }
+            true
         }
         Err(error) => {
             ui.set_lanes(ModelRc::new(VecModel::default()));
             ui.set_summary("No worktrees loaded".into());
             ui.set_message(format!("Could not load worktrees: {error}").into());
             ui.set_has_error(true);
+            false
+        }
+    }
+}
+
+fn worker(tasks: Receiver<Task>, events: Sender<Event>) {
+    while let Ok(task) = tasks.recv() {
+        let event = match task {
+            Task::Refresh { project, announce } => Event::Refreshed {
+                result: load_project(&project, announce),
+                project,
+                announce,
+            },
+            Task::Run {
+                project,
+                path,
+                command,
+            } => {
+                let outcome = run_lane(&path, &command);
+                let (message, has_error) = match outcome {
+                    Ok(lane) => (format!("Started {} at {}", lane.branch, lane.url()), false),
+                    Err(error) => (format!("Could not start worktree: {error}"), true),
+                };
+                Event::Action {
+                    result: load_project(&project, false),
+                    project,
+                    message,
+                    has_error,
+                }
+            }
+            Task::Stop { project, path } => {
+                let outcome = stop(Path::new(&path));
+                let (message, has_error) = match outcome {
+                    Ok(lane) => (format!("Stopped {}", lane.branch), false),
+                    Err(error) => (format!("Could not stop worktree: {error}"), true),
+                };
+                Event::Action {
+                    result: load_project(&project, false),
+                    project,
+                    message,
+                    has_error,
+                }
+            }
+        };
+        if events.send(event).is_err() {
+            break;
         }
     }
 }
@@ -184,14 +288,20 @@ fn main() -> Result<()> {
         ui.set_project_path(path.to_string_lossy().into_owned().into());
     }
 
+    let (tasks, pending_tasks) = mpsc::channel();
+    let (completed_events, events) = mpsc::channel();
+    std::thread::spawn(move || worker(pending_tasks, completed_events));
+
     let weak = ui.as_weak();
+    let sender = tasks.clone();
     ui.on_refresh(move || {
         if let Some(ui) = weak.upgrade() {
-            refresh(&ui, true);
+            request_refresh(&ui, &sender, true);
         }
     });
 
     let weak = ui.as_weak();
+    let sender = tasks.clone();
     ui.on_choose_project(move || {
         if let Some(ui) = weak.upgrade() {
             let mut dialog = rfd::FileDialog::new().set_title("Select a Git worktree");
@@ -203,42 +313,35 @@ fn main() -> Result<()> {
             }
             if let Some(path) = dialog.pick_folder() {
                 ui.set_project_path(path.to_string_lossy().into_owned().into());
-                refresh(&ui, true);
+                request_refresh(&ui, &sender, true);
             }
         }
     });
 
     let weak = ui.as_weak();
+    let sender = tasks.clone();
     ui.on_run_lane(move |path| {
         if let Some(ui) = weak.upgrade() {
-            match run_lane(&path, &ui.get_command_text()) {
-                Ok(lane) => {
-                    refresh(&ui, false);
-                    ui.set_message(format!("Started {} at {}", lane.branch, lane.url()).into());
-                    ui.set_has_error(false);
-                }
-                Err(error) => {
-                    ui.set_message(format!("Could not start worktree: {error}").into());
-                    ui.set_has_error(true);
-                }
-            }
+            ui.set_message("Starting worktree...".into());
+            ui.set_has_error(false);
+            let _ = sender.send(Task::Run {
+                project: ui.get_project_path().to_string(),
+                path: path.to_string(),
+                command: ui.get_command_text().to_string(),
+            });
         }
     });
 
     let weak = ui.as_weak();
+    let sender = tasks.clone();
     ui.on_stop_lane(move |path| {
         if let Some(ui) = weak.upgrade() {
-            match stop(Path::new(path.as_str())) {
-                Ok(lane) => {
-                    refresh(&ui, false);
-                    ui.set_message(format!("Stopped {}", lane.branch).into());
-                    ui.set_has_error(false);
-                }
-                Err(error) => {
-                    ui.set_message(format!("Could not stop worktree: {error}").into());
-                    ui.set_has_error(true);
-                }
-            }
+            ui.set_message("Stopping worktree...".into());
+            ui.set_has_error(false);
+            let _ = sender.send(Task::Stop {
+                project: ui.get_project_path().to_string(),
+                path: path.to_string(),
+            });
         }
     });
 
@@ -269,14 +372,52 @@ fn main() -> Result<()> {
         }
     });
 
-    refresh(&ui, true);
+    request_refresh(&ui, &tasks, true);
     let refresh_timer = Timer::default();
     let weak = ui.as_weak();
+    let sender = tasks.clone();
     refresh_timer.start(TimerMode::Repeated, Duration::from_secs(4), move || {
         if let Some(ui) = weak.upgrade() {
-            refresh(&ui, false);
+            request_refresh(&ui, &sender, false);
             if ui.get_log_visible() {
                 refresh_log(&ui);
+            }
+        }
+    });
+    let event_timer = Timer::default();
+    let weak = ui.as_weak();
+    event_timer.start(TimerMode::Repeated, Duration::from_millis(100), move || {
+        let Some(ui) = weak.upgrade() else {
+            return;
+        };
+        while let Ok(event) = events.try_recv() {
+            match event {
+                Event::Refreshed {
+                    project,
+                    announce,
+                    result,
+                } => {
+                    if apply_loaded(&ui, &project, result) {
+                        if announce {
+                            ui.set_message("Worktrees refreshed".into());
+                            ui.set_has_error(false);
+                        } else if ui.get_message().starts_with("Could not load worktrees:") {
+                            ui.set_message("Ready".into());
+                            ui.set_has_error(false);
+                        }
+                    }
+                }
+                Event::Action {
+                    project,
+                    message,
+                    has_error,
+                    result,
+                } => {
+                    if apply_loaded(&ui, &project, result) {
+                        ui.set_message(message.into());
+                        ui.set_has_error(has_error);
+                    }
+                }
             }
         }
     });
