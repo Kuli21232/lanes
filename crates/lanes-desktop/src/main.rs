@@ -1,3 +1,5 @@
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 slint::include_modules!();
 
 use lanes_core::{detect, discover, launch, process_alive, stop, Result};
@@ -33,8 +35,7 @@ fn refresh(ui: &AppWindow) {
 fn run_lane(path: &str, command: &str) -> Result<()> {
     let worktree = detect(Path::new(path))?;
     let args = shell_words::split(command)?;
-    let (lane, _child) = launch(&worktree, &args, false)?;
-    println!("Started {} at {}", lane.branch, lane.url());
+    let (_lane, _child) = launch(&worktree, &args, false)?;
     Ok(())
 }
 
