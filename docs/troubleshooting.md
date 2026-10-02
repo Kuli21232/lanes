@@ -36,6 +36,10 @@ Lanes allocates from `4300–4999` across all repositories in the local registry
 
 The desktop app needs a graphical session and the platform libraries used by Slint's native window backend. For a source build on Ubuntu or Debian, install the packages listed in [development setup](development.md). If the folder picker is unavailable in your desktop environment, enter the repository path in **Project directory** and click **Refresh**.
 
+## The Windows folder picker stops responding
+
+The **Browse…** button uses the Windows folder picker. If it stalls while loading a cloud-synced folder, paste the repository path directly into **Project directory** and click **Refresh**. You can also start the app with `lanes-desktop.exe C:\path\to\project` from PowerShell. The app remembers a successfully opened project for later launches.
+
 ## Logs are empty or outdated
 
 Only desktop launches write `lane-PORT.log`. CLI output stays in its terminal. A new desktop run recreates the file for that port; the **Logs** panel displays only its last 64 KiB. If you assigned a new port, use **Logs** on the current row.

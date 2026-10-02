@@ -194,7 +194,13 @@ fn main() -> Result<()> {
     let weak = ui.as_weak();
     ui.on_choose_project(move || {
         if let Some(ui) = weak.upgrade() {
-            let dialog = rfd::FileDialog::new().set_title("Select a Git worktree");
+            let mut dialog = rfd::FileDialog::new().set_title("Select a Git worktree");
+            #[cfg(windows)]
+            if let Some(home) = std::env::var_os("USERPROFILE") {
+                if Path::new(&home).is_dir() {
+                    dialog = dialog.set_directory(home);
+                }
+            }
             if let Some(path) = dialog.pick_folder() {
                 ui.set_project_path(path.to_string_lossy().into_owned().into());
                 refresh(&ui, true);
