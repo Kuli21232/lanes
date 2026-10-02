@@ -252,6 +252,16 @@ fn real_main() -> Result<i32> {
     }
 }
 
+fn main() {
+    match real_main() {
+        Ok(code) => std::process::exit(code),
+        Err(error) => {
+            eprintln!("lanes: {error}");
+            std::process::exit(1);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -304,15 +314,5 @@ mod tests {
             Some(executable)
         );
         assert!(resolve_executable("/missing/lanes-doctor-tool", Path::new(".")).is_none());
-    }
-}
-
-fn main() {
-    match real_main() {
-        Ok(code) => std::process::exit(code),
-        Err(error) => {
-            eprintln!("lanes: {error}");
-            std::process::exit(1);
-        }
     }
 }

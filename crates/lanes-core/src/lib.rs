@@ -48,7 +48,7 @@ impl Lane {
     }
 
     pub fn name(&self) -> String {
-        self.branch.replace('/', "-").replace('\\', "-")
+        self.branch.replace(['/', '\\'], "-")
     }
 
     /// The environment passed to commands launched in this lane.
@@ -61,7 +61,7 @@ fn lane_environment(branch: &str, port: u16) -> [(&'static str, String); 4] {
     [
         ("PORT", port.to_string()),
         ("LANE_PORT", port.to_string()),
-        ("LANE", branch.replace('/', "-").replace('\\', "-")),
+        ("LANE", branch.replace(['/', '\\'], "-")),
         ("BASE_URL", format!("http://localhost:{port}")),
     ]
 }
@@ -85,6 +85,7 @@ impl RegistryGuard {
             .create(true)
             .read(true)
             .write(true)
+            .truncate(false)
             .open(home.join("registry.lock"))?;
         lock.lock_exclusive()?;
         let path = home.join("registry.json");
