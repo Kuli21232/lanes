@@ -46,6 +46,20 @@ impl Lane {
     pub fn name(&self) -> String {
         self.branch.replace('/', "-").replace('\\', "-")
     }
+
+    /// The environment passed to commands launched in this lane.
+    pub fn environment(&self) -> [(&'static str, String); 4] {
+        lane_environment(&self.branch, self.port)
+    }
+}
+
+fn lane_environment(branch: &str, port: u16) -> [(&'static str, String); 4] {
+    [
+        ("PORT", port.to_string()),
+        ("LANE_PORT", port.to_string()),
+        ("LANE", branch.replace('/', "-").replace('\\', "-")),
+        ("BASE_URL", format!("http://localhost:{port}")),
+    ]
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -217,9 +231,19 @@ fn upsert(registry: &mut Registry, worktree: &Worktree) -> Result<usize> {
     Ok(registry.lanes.len() - 1)
 }
 
+fn refresh_idle_port(registry: &mut Registry, index: usize) -> Result<()> {
+    let lane = &registry.lanes[index];
+    if !process_alive(lane) && !port_available(lane.port) {
+        let replacement = choose_port(registry, Some(&lane.path))?;
+        registry.lanes[index].port = replacement;
+    }
+    Ok(())
+}
+
 pub fn ensure(worktree: &Worktree) -> Result<Lane> {
     let mut registry = RegistryGuard::open()?;
     let index = upsert(&mut registry.data, worktree)?;
+    refresh_idle_port(&mut registry.data, index)?;
     registry.save()?;
     Ok(registry.data.lanes[index].clone())
 }
@@ -318,10 +342,7 @@ fn build_command(args: &[String], worktree: &Worktree, port: u16) -> Result<Comm
     };
     command
         .current_dir(&worktree.path)
-        .env("PORT", port.to_string())
-        .env("LANE_PORT", port.to_string())
-        .env("LANE", worktree.branch.replace('/', "-"))
-        .env("BASE_URL", format!("http://localhost:{port}"));
+        .envs(lane_environment(&worktree.branch, port));
     Ok(command)
 }
 
@@ -337,10 +358,7 @@ pub fn launch(worktree: &Worktree, args: &[String], foreground: bool) -> Result<
         ))
         .into());
     }
-    if !port_available(old.port) {
-        let replacement = choose_port(&registry.data, Some(&worktree.path))?;
-        registry.data.lanes[index].port = replacement;
-    }
+    refresh_idle_port(&mut registry.data, index)?;
     let port = registry.data.lanes[index].port;
     let mut command = build_command(args, worktree, port)?;
     if foreground {
