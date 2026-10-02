@@ -34,7 +34,7 @@ feature/payments         http://localhost:4302   ○ stopped
 
 ## Install
 
-Download the CLI and native desktop app from [Releases](https://github.com/Kuli21232/lanes/releases). The Windows archive contains `lanes.exe` and `lanes-desktop.exe`; the Linux archive contains `lanes` and `lanes-desktop`.
+Download the CLI and native desktop app from [Releases](https://github.com/Kuli21232/lanes/releases). The Windows archive contains `lanes.exe` and `lanes-desktop.exe`; the Linux and macOS archives contain `lanes` and `lanes-desktop`. The macOS archive targets Apple Silicon.
 
 To build from source, install Git and a [Rust toolchain](https://rustup.rs/). On Windows, Rust also needs the Visual Studio C++ build tools.
 

@@ -26,6 +26,8 @@ jobs:
             archive: lanes-windows-x64.zip
           - os: ubuntu-latest
             archive: lanes-linux-x64.tar.gz
+          - os: macos-latest
+            archive: lanes-macos-arm64.tar.gz
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -38,8 +40,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: Compress-Archive -Path target/release/lanes.exe,target/release/lanes-desktop.exe -DestinationPath "${{ matrix.archive }}"
-      - name: Package Linux binaries
-        if: runner.os == 'Linux'
+      - name: Package Unix binaries
+        if: runner.os != 'Windows'
         run: tar -C target/release -czf "${{ matrix.archive }}" lanes lanes-desktop
       - name: Upload binary archive
         env:
