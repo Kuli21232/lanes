@@ -1,5 +1,5 @@
 use lanes_core::{
-    all_lanes, detect, discover, ensure, finish, launch, process_alive, stop, Lane, Result,
+    all_lanes, detect, discover, ensure, finish, launch_in, process_alive, stop, Lane, Result,
 };
 use std::env;
 use std::io;
@@ -54,7 +54,7 @@ fn real_main() -> Result<i32> {
             if command.is_empty() {
                 command = vec!["npm".into(), "run".into(), "dev".into()];
             }
-            let (lane, mut child) = launch(&worktree, &command, true)?;
+            let (lane, mut child) = launch_in(&worktree, &command, true, &cwd)?;
             println!(
                 "\nLANES  {} · {}\nPORT={}  {}\n",
                 lane.repository,

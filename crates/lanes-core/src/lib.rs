@@ -311,7 +311,12 @@ fn windows_script(executable: &str) -> bool {
     false
 }
 
-fn build_command(args: &[String], worktree: &Worktree, port: u16) -> Result<Command> {
+fn build_command(
+    args: &[String],
+    worktree: &Worktree,
+    directory: &Path,
+    port: u16,
+) -> Result<Command> {
     if args.is_empty() {
         return Err(io::Error::other("missing command").into());
     }
@@ -341,12 +346,23 @@ fn build_command(args: &[String], worktree: &Worktree, port: u16) -> Result<Comm
         process
     };
     command
-        .current_dir(&worktree.path)
+        .current_dir(directory)
         .envs(lane_environment(&worktree.branch, port));
     Ok(command)
 }
 
 pub fn launch(worktree: &Worktree, args: &[String], foreground: bool) -> Result<(Lane, Child)> {
+    launch_in(worktree, args, foreground, &worktree.path)
+}
+
+/// Launch a command in a worktree lane from the specified working directory.
+/// The CLI uses the invoking directory; desktop launchers can use the worktree root.
+pub fn launch_in(
+    worktree: &Worktree,
+    args: &[String],
+    foreground: bool,
+    directory: &Path,
+) -> Result<(Lane, Child)> {
     let mut registry = RegistryGuard::open()?;
     let index = upsert(&mut registry.data, worktree)?;
     let old = &registry.data.lanes[index];
@@ -360,7 +376,7 @@ pub fn launch(worktree: &Worktree, args: &[String], foreground: bool) -> Result<
     }
     refresh_idle_port(&mut registry.data, index)?;
     let port = registry.data.lanes[index].port;
-    let mut command = build_command(args, worktree, port)?;
+    let mut command = build_command(args, worktree, directory, port)?;
     if foreground {
         command
             .stdin(Stdio::inherit())
@@ -506,6 +522,27 @@ mod tests {
         std::env::remove_var("LANES_HOME");
     }
 
+    #[test]
+    fn command_uses_invoking_subdirectory() {
+        let temporary = tempfile::tempdir().unwrap();
+        let nested = temporary.path().join("examples").join("branch-demo");
+        fs::create_dir_all(&nested).unwrap();
+        let worktree = Worktree {
+            path: temporary.path().to_path_buf(),
+            repository: "test".into(),
+            common_dir: PathBuf::new(),
+            branch: "feature/test".into(),
+        };
+        let command = build_command(
+            &["node".into(), "server.mjs".into()],
+            &worktree,
+            &nested,
+            4317,
+        )
+        .unwrap();
+        assert_eq!(command.get_current_dir(), Some(nested.as_path()));
+    }
+
     #[cfg(windows)]
     #[test]
     fn cmd_shim_preserves_quoted_arguments_and_port() {
@@ -521,6 +558,7 @@ mod tests {
         let output = build_command(
             &[script.to_string_lossy().into_owned(), "hello world".into()],
             &worktree,
+            &worktree.path,
             4317,
         )
         .unwrap()
