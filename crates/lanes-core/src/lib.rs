@@ -271,11 +271,10 @@ pub fn all_lanes() -> Result<Vec<Lane>> {
     Ok(RegistryGuard::open()?.data.lanes)
 }
 
-pub fn process_alive(lane: &Lane) -> bool {
+fn process_alive_in(system: &System, lane: &Lane) -> bool {
     let (Some(pid), Some(start)) = (lane.pid, lane.process_started) else {
         return false;
     };
-    let system = System::new_all();
     system.process(Pid::from_u32(pid)).is_some_and(|process| {
         process.start_time() == start
             && !matches!(
@@ -283,6 +282,34 @@ pub fn process_alive(lane: &Lane) -> bool {
                 ProcessStatus::Zombie | ProcessStatus::Dead
             )
     })
+}
+
+pub fn process_alive(lane: &Lane) -> bool {
+    process_alive_in(&System::new_all(), lane)
+}
+
+fn prune_missing_in(registry: &mut Registry) -> Vec<Lane> {
+    let system = System::new_all();
+    let mut removed = Vec::new();
+    registry.lanes.retain(|lane| {
+        let stale = !lane.path.is_dir() && !process_alive_in(&system, lane);
+        if stale {
+            removed.push(lane.clone());
+        }
+        !stale
+    });
+    removed
+}
+
+/// Release ports reserved by lanes whose worktree directory is gone.
+/// Missing directories with a live tracked process are retained.
+pub fn prune() -> Result<Vec<Lane>> {
+    let mut registry = RegistryGuard::open()?;
+    let removed = prune_missing_in(&mut registry.data);
+    if !removed.is_empty() {
+        registry.save()?;
+    }
+    Ok(removed)
 }
 
 fn process_start(pid: u32) -> Option<u64> {
@@ -559,6 +586,37 @@ pub fn stop(path: &Path) -> Result<Lane> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::OsString;
+    use std::sync::{Mutex, MutexGuard};
+
+    static LANES_HOME_LOCK: Mutex<()> = Mutex::new(());
+
+    struct TestHome {
+        previous: Option<OsString>,
+        _guard: MutexGuard<'static, ()>,
+    }
+
+    impl TestHome {
+        fn new(path: &Path) -> Self {
+            let guard = LANES_HOME_LOCK.lock().unwrap();
+            let previous = std::env::var_os("LANES_HOME");
+            std::env::set_var("LANES_HOME", path);
+            Self {
+                previous,
+                _guard: guard,
+            }
+        }
+    }
+
+    impl Drop for TestHome {
+        fn drop(&mut self) {
+            if let Some(previous) = self.previous.take() {
+                std::env::set_var("LANES_HOME", previous);
+            } else {
+                std::env::remove_var("LANES_HOME");
+            }
+        }
+    }
 
     fn run_git(path: &Path, args: &[&str]) {
         let status = Command::new("git")
@@ -622,7 +680,7 @@ mod tests {
             ],
         );
 
-        std::env::set_var("LANES_HOME", temporary.path().join("data"));
+        let _home = TestHome::new(&temporary.path().join("data"));
         let first = discover(&repository).unwrap();
         assert_eq!(first.len(), 2);
         assert_ne!(first[0].port, first[1].port);
@@ -631,7 +689,6 @@ mod tests {
             first.iter().map(|lane| lane.port).collect::<Vec<_>>(),
             second.iter().map(|lane| lane.port).collect::<Vec<_>>()
         );
-        std::env::remove_var("LANES_HOME");
     }
 
     #[test]
@@ -686,6 +743,88 @@ mod tests {
         )
         .unwrap();
         assert!(!lane.isolated_process_group);
+    }
+
+    #[test]
+    fn prune_only_removes_missing_stopped_worktrees() {
+        let temporary = tempfile::tempdir().unwrap();
+        let missing = temporary.path().join("missing");
+        let existing = temporary.path().join("existing");
+        fs::create_dir(&existing).unwrap();
+        let make_lane = |path: PathBuf, pid: Option<u32>, process_started: Option<u64>| Lane {
+            path,
+            repository: "shop".into(),
+            common_dir: temporary.path().join(".git"),
+            branch: "main".into(),
+            port: 4300,
+            pid,
+            process_started,
+            isolated_process_group: false,
+            command: Vec::new(),
+        };
+        let current_pid = std::process::id();
+        let current_start = process_start(current_pid).unwrap();
+        let mut registry = Registry {
+            lanes: vec![
+                make_lane(missing.clone(), None, None),
+                make_lane(existing, None, None),
+                make_lane(missing, Some(current_pid), Some(current_start)),
+            ],
+        };
+        let removed = prune_missing_in(&mut registry);
+        assert_eq!(removed.len(), 1);
+        assert_eq!(registry.lanes.len(), 2);
+        assert!(process_alive(&registry.lanes[1]));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn server_helper() {
+        if std::env::var_os("LANES_TEST_SERVER").is_none() {
+            return;
+        }
+        let port = std::env::var("PORT").unwrap().parse::<u16>().unwrap();
+        let _listener = TcpListener::bind(("127.0.0.1", port)).unwrap();
+        loop {
+            thread::park();
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stop_terminates_foreground_descendant_and_keeps_port() {
+        let temporary = tempfile::tempdir().unwrap();
+        let repository = temporary.path().join("shop");
+        fs::create_dir(&repository).unwrap();
+        run_git(&repository, &["init", "-b", "main"]);
+        let worktree = detect(&repository).unwrap();
+        let _home = TestHome::new(&temporary.path().join("data"));
+
+        let test_binary = std::env::current_exe().unwrap();
+        let escaped = test_binary.to_string_lossy().replace('\'', "'\"'\"'");
+        let script = format!(
+            "LANES_TEST_SERVER=1 '{escaped}' --exact tests::server_helper --nocapture & wait"
+        );
+        let (lane, mut shell) =
+            launch(&worktree, &["sh".into(), "-c".into(), script], true).unwrap();
+        let mut ready = false;
+        for _ in 0..50 {
+            if !port_available(lane.port) {
+                ready = true;
+                break;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        if !ready {
+            let _ = shell.kill();
+            let _ = shell.wait();
+        }
+        assert!(ready, "helper server did not bind lane port");
+
+        stop(&worktree.path).unwrap();
+        shell.wait().unwrap();
+        assert!(port_available(lane.port));
+        assert_eq!(ensure(&worktree).unwrap().port, lane.port);
     }
 
     #[cfg(windows)]

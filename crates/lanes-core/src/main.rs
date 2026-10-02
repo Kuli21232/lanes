@@ -1,6 +1,6 @@
 use lanes_core::{
     all_lanes, data_dir, detect, discover, ensure, finish, launch_in, port_available,
-    process_alive, stop, Lane, Result,
+    process_alive, prune, stop, Lane, Result,
 };
 use std::env;
 use std::io;
@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn usage() {
-    println!("Lanes — Run every branch. No port collisions.\n\n  lanes run [command...]       Run a command (default: npm run dev)\n  lanes status                 Show worktree URLs and running state\n  lanes env [--shell FORMAT]   Print environment (dotenv, sh, powershell)\n  lanes doctor [command...]    Check Git, lane port and optional command\n  lanes stop                   Stop the command in the current worktree\n  lanes help                   Show this help");
+    println!("Lanes — Run every branch. No port collisions.\n\n  lanes run [command...]       Run a command (default: npm run dev)\n  lanes status                 Show worktree URLs and running state\n  lanes env [--shell FORMAT]   Print environment (dotenv, sh, powershell)\n  lanes doctor [command...]    Check Git, lane port and optional command\n  lanes prune                  Release ports for deleted worktrees\n  lanes stop                   Stop the command in the current worktree\n  lanes help                   Show this help");
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -224,6 +224,17 @@ fn real_main() -> Result<i32> {
                 command.remove(0);
             }
             doctor(&cwd, &command)
+        }
+        "prune" => {
+            if args.next().is_some() {
+                return Err(io::Error::other("usage: lanes prune").into());
+            }
+            let removed = prune()?;
+            for lane in &removed {
+                println!("Released {} ({})", lane.path.display(), lane.port);
+            }
+            println!("{} stale lane(s) pruned", removed.len());
+            Ok(0)
         }
         "stop" => {
             let lane = stop(&detect(&cwd)?.path)?;
