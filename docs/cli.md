@@ -63,7 +63,7 @@ lanes doctor npm
 lanes doctor -- node server.mjs
 ```
 
-`doctor` checks that Git runs, the current directory belongs to a worktree, the registry can be opened, and the selected lane port is available or occupied by the tracked lane process. If a command is supplied, it checks whether the first word names an executable in the current directory or `PATH`. It does not run that executable or inspect the application's network behavior. Failed checks return exit code 1.
+`doctor` checks that Git runs, the current directory belongs to a worktree, the registry can be opened, and the selected lane port is available or occupied by the tracked lane process. If a command is supplied, it checks whether the first word names an executable. A bare name is searched on `PATH`; Windows also checks the current directory. A relative path such as `./tool` is resolved from the current directory. `doctor` does not run the executable or inspect the application's network behavior. Failed checks return exit code 1.
 
 ## `stop`
 
@@ -89,6 +89,13 @@ Lanes stores `registry.json` and `registry.lock` in the operating system's local
 
 ```sh
 LANES_HOME=/tmp/lanes-test lanes status
+```
+
+In PowerShell:
+
+```powershell
+$env:LANES_HOME = 'C:\temp\lanes-test'
+lanes status
 ```
 
 `LANES_HOME` must be set in every CLI or desktop process that should share that alternate registry. Desktop runs also write `lane-PORT.log` there. CLI runs write to the terminal.

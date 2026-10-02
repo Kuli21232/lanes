@@ -15,7 +15,7 @@ The CLI and desktop app use the same registry and allocation functions. There is
 
 Lanes calls Git to find the current top-level worktree path, the repository's common Git directory, and its branch. `git worktree list --porcelain` supplies the other worktrees. A detached HEAD is shown by its short commit ID.
 
-The canonical worktree path identifies a lane. Renaming the branch keeps the same port as long as the worktree path stays the same; removing and recreating a worktree at a different path creates a new lane. The repository's common Git directory groups worktrees for display, while port reservations are global across the local registry.
+The canonical worktree path identifies a lane. Renaming the branch keeps the same port as long as the worktree path stays the same; removing and recreating a worktree at a different path creates a new lane. The common Git directory identifies which worktrees belong to the same repository. Port reservations are global across the local registry.
 
 ## Port allocation
 

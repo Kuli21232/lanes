@@ -19,7 +19,9 @@ Lanes includes a Rust CLI and a native desktop app built with [Slint](https://sl
 
 ## Start here
 
-1. Download the archive for your machine from [Releases](https://github.com/Kuli21232/lanes/releases/latest): Windows x64, Linux x64, or macOS Apple Silicon. Extract it and place `lanes` on your `PATH`, or run it from the extracted directory. Each archive also contains `lanes-desktop`.
+Русская краткая инструкция: [docs/ru/README.md](docs/ru/README.md).
+
+1. Download the archive for your machine from [Releases](https://github.com/Kuli21232/lanes/releases/latest): Windows x64, Linux x64, or macOS Apple Silicon. Extract it and add that directory to your `PATH` for the commands below. You can also call the extracted binary directly (`./lanes` on Linux/macOS, `.\lanes.exe` in PowerShell). Each archive also contains `lanes-desktop`.
 2. In a Git repository, start your project in one terminal:
 
    ```sh

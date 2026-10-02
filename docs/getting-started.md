@@ -12,7 +12,26 @@ Download the current archive from [GitHub Releases](https://github.com/Kuli21232
 | Linux x64 | `lanes-linux-x64.tar.gz` | `lanes`, `lanes-desktop` |
 | macOS Apple Silicon | `lanes-macos-arm64.tar.gz` | `lanes`, `lanes-desktop` |
 
-Extract the archive, then run `lanes --help` from that directory. Add the directory to your `PATH` if you want to call `lanes` from anywhere.
+Extract the archive, then run the executable in that directory (for example `./lanes --help` on Linux/macOS or `.\lanes.exe --help` in PowerShell). Add the directory to your `PATH` if you want to call `lanes` from anywhere.
+
+For example, in PowerShell on Windows:
+
+```powershell
+Invoke-WebRequest https://github.com/Kuli21232/lanes/releases/latest/download/lanes-windows-x64.zip -OutFile lanes.zip
+Expand-Archive -LiteralPath .\lanes.zip -DestinationPath .\lanes-bin
+.\lanes-bin\lanes.exe --help
+```
+
+On Linux x64, extract the matching archive and run the binary in place:
+
+```sh
+curl -fL https://github.com/Kuli21232/lanes/releases/latest/download/lanes-linux-x64.tar.gz -o lanes.tar.gz
+mkdir -p lanes-bin
+tar -xzf lanes.tar.gz -C lanes-bin
+./lanes-bin/lanes --help
+```
+
+Use `lanes-macos-arm64.tar.gz` in those commands on an Apple Silicon Mac. These examples keep the binaries in the current directory; moving them to a directory on `PATH` is optional.
 
 To install the CLI from source instead:
 
@@ -41,7 +60,7 @@ The application must use `PORT`. If it always binds its own default port, update
 From a second terminal in the first worktree, create a branch and worktree:
 
 ```sh
-git worktree add ../my-app-auth -b feature/auth
+git worktree add -b feature/auth ../my-app-auth
 cd ../my-app-auth
 lanes run npm run dev
 ```

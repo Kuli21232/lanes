@@ -32,6 +32,8 @@ The desktop app starts its command at the **worktree root**. The CLI starts from
 
 Desktop commands write stdout and stderr to `lane-PORT.log` in the [Lanes data directory](cli.md#environment-and-data). A new desktop run on that port starts a fresh log. The **Logs** panel shows the last 64 KiB and refreshes every four seconds while open. CLI runs keep output in their terminal instead.
 
+Logs are named by port. If an old lane is removed and its port is later reused, **Logs** may show the previous lane's output until the new lane has been run from the desktop app.
+
 The row's “running” state means that the recorded process ID and start time still match a live process. It does not mean that the application has bound its port or passed an HTTP health check. If **Open** reaches no server, inspect **Logs** and confirm the application reads `PORT`.
 
 Closing the log panel does not stop the command. Use **Stop** on the row when you want Lanes to terminate it.
