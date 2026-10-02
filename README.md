@@ -2,97 +2,82 @@
 
 **Run every branch. No port collisions.**
 
-Four Git worktrees. Four branches. One default port. What could possibly go wrong?
+![Four Git worktrees, each with its own local port](docs/assets/lanes-overview.svg)
+
+Git worktrees make it easy to keep several branches open. Local development servers still tend to ask for the same port. Lanes assigns a port to each worktree, remembers it between runs, and passes it to your command.
 
 ```text
-Before Lanes              After Lanes
-main      → :3000          main      → :4300
-auth      → :3000 ✗        auth      → :4301
-payments  → :3000 ✗        payments  → :4302
+Terminal 1 · main                Terminal 2 · feature/auth
+$ lanes run npm run dev          $ lanes run npm run dev
+PORT=4300                       PORT=4301
+http://localhost:4300           http://localhost:4301
 ```
 
-Lanes gives each worktree a stable local port and passes it to the command you run.
+Ports above are examples. The actual port depends on the reservations already on your machine.
 
-```text
-$ lanes run npm run dev
+Lanes includes a Rust CLI and a native desktop app built with [Slint](https://slint.dev/). The desktop app does not use a WebView.
 
-LANES  shop · feature/auth
-PORT=4301  http://localhost:4301
-```
+## Start here
 
-Open another worktree and run the same command. It gets another port. `lanes status` lists every worktree in the repository:
+1. Download the archive for your machine from [Releases](https://github.com/Kuli21232/lanes/releases/latest): Windows x64, Linux x64, or macOS Apple Silicon. Extract it and place `lanes` on your `PATH`, or run it from the extracted directory. Each archive also contains `lanes-desktop`.
+2. In a Git repository, start your project in one terminal:
 
-```text
-LANES
+   ```sh
+   lanes run npm run dev
+   ```
 
-main                     http://localhost:4300   ● running
-feature/auth             http://localhost:4301   ● running
-feature/payments         http://localhost:4302   ○ stopped
+3. Open a second terminal in another worktree of the same repository and run the same command. From either worktree, use `lanes status` to see both URLs.
 
-3 worktrees · 2 running
-```
+Your server must read `PORT` or be configured to use it. Lanes cannot change a port hardcoded inside the server. For a working example that needs no npm packages, try the [four-worktree demo](examples/branch-demo/README.md).
 
-## Install
-
-Download the CLI and native desktop app from [Releases](https://github.com/Kuli21232/lanes/releases). The Windows archive contains `lanes.exe` and `lanes-desktop.exe`; the Linux and macOS archives contain `lanes` and `lanes-desktop`. The macOS archive targets Apple Silicon.
-
-To build from source, install Git and a [Rust toolchain](https://rustup.rs/). On Windows, Rust also needs the Visual Studio C++ build tools.
-
-```sh
-cargo install --git https://github.com/Kuli21232/lanes --package lanes-core
-```
-
-The executable is called `lanes`. In a development checkout:
-
-```sh
-cargo run -p lanes-core --bin lanes -- run npm run dev
-```
+**New to worktrees?** The [getting started guide](docs/getting-started.md) covers installation, creating a second worktree, and checking that both servers respond.
 
 ## Commands
 
-| Command | What it does |
+| Command | Purpose |
 | --- | --- |
-| `lanes run [command...]` | Run a command in the current worktree. Defaults to `npm run dev`. |
-| `lanes status` | Discover and display the repository's worktrees and their local URLs. |
-| `lanes env [--shell FORMAT]` | Print this worktree's `PORT`, `LANE_PORT`, `LANE` and `BASE_URL`. Formats: `dotenv`, `sh`, `powershell`. |
-| `lanes doctor [command...]` | Check Git, worktree detection, the registry, port availability and an optional executable. |
-| `lanes prune` | Release reservations for deleted, stopped worktrees. |
-| `lanes stop` | Stop the process Lanes started in the current worktree. |
+| `lanes run [command...]` | Run a command in the current worktree with its lane environment. With no command, runs `npm run dev`. |
+| `lanes status` | List worktrees, their reserved URLs, and tracked process state. Outside a Git repository, lists saved lanes. |
+| `lanes env [--shell FORMAT]` | Print `PORT`, `LANE_PORT`, `LANE`, and `BASE_URL` as `dotenv`, `sh`, or `powershell`. |
+| `lanes doctor [command...]` | Check Git, worktree detection, registry access, the lane port, and optionally an executable. |
+| `lanes stop` | Stop the command Lanes tracks in the current worktree. |
+| `lanes prune` | Remove reservations for deleted worktrees without a running tracked process. |
 | `lanes` | Shortcut for `lanes status`. |
 
-Lanes sets `PORT`, `LANE_PORT`, `LANE` and `BASE_URL` in the child environment. Applications must read `PORT` to bind to the assigned port. If your tool ignores `PORT`, use a script that reads it. For Vite, a small cross-platform Node launcher works:
+Lanes passes these variables to the child process:
 
-```js
-import { spawn } from "node:child_process";
-const child = spawn("vite", ["--port", process.env.PORT], { stdio: "inherit", shell: true });
-child.on("exit", code => process.exit(code ?? 1));
+```text
+PORT=4301
+LANE_PORT=4301
+LANE=feature-auth
+BASE_URL=http://localhost:4301
 ```
 
-Then point `npm run dev` at that script. Other tools, including many Node servers, already honor `PORT` directly.
+It does not edit `.env` files. See the [CLI reference](docs/cli.md) for exact command behavior and the [recipes](docs/recipes.md) for project integration examples.
 
-`lanes env` prints the same values without starting a process. For example, `lanes env --shell sh` produces `export` statements for a Unix shell, while `lanes env --shell powershell` produces PowerShell assignments. `lanes doctor npm` checks whether `npm` is available alongside the lane setup.
+## Desktop app
 
-## Native desktop app
-
-The dashboard is a native [Slint](https://slint.dev/) window backed by the same Rust core as the CLI. It has no browser engine, HTML layer or WebView. Choose a Git repository, refresh its worktrees, and run or stop each one with the configured command. The window updates running states automatically, opens lane URLs in your browser and shows recent command output.
+Launch `lanes-desktop` from the extracted archive, or build and run it from source:
 
 ```sh
 cargo run -p lanes-desktop
 ```
 
-The desktop app writes background command output to `lane-PORT.log` in the Lanes data directory. The registry is stored in the same directory: `%LOCALAPPDATA%\Lanes` on Windows and the user data directory on Linux/macOS. Set `LANES_HOME` to override it.
+Choose a folder inside your repository. The app lists its worktrees and their URLs. Set a run command, then use **Run**, **Stop**, **Logs**, and **Open** on each row. It refreshes process state every four seconds. Commands launched from the desktop app run from the worktree root; CLI commands run from the directory where you invoke `lanes`.
 
-## Try four branches
+See the [desktop guide](docs/desktop.md) for controls, command parsing, and log locations.
 
-The [branch demo](examples/branch-demo/README.md) is a zero-dependency Node server that shows the current lane and port in a browser. Run it from four worktrees to see four stable URLs.
+## How it works
 
-## How ports stay stable
+Lanes asks Git for the current worktree and the repository's worktree list. A registry in your user data directory maps each canonical worktree path to a port in `4300–4999`. An interprocess lock protects registry updates. A stopped worktree keeps its port unless another application has taken it when Lanes next prepares that lane.
 
-Lanes identifies a worktree by its canonical path. Its shared registry reserves one port in `4300–4999` per worktree. An interprocess file lock protects allocation. On launch, Lanes checks that the assigned port is available; if another application occupies it, Lanes assigns a new free port. Stopped worktrees retain their assignment. Run `lanes prune` after deleting worktrees to reclaim their reservations.
+![Git worktree discovery, registry, and native clients](docs/assets/architecture.svg)
 
-The initial release manages one service port per worktree. It does not yet rewrite `.env` files, configure OAuth callbacks, proxy multiple services, or guarantee that a child application listens on `PORT`. Those are separate future capabilities.
+Read the [architecture notes](docs/architecture.md) for port allocation, process tracking, storage, and current limits.
 
-## Development
+## Build and contribute
+
+Install [Rust](https://rustup.rs/) and Git. Windows builds also need the Visual Studio C++ build tools. On Linux, the desktop build needs system libraries for X11, Wayland, fonts, and keyboard input; see [development setup](docs/development.md).
 
 ```sh
 cargo fmt --all --check
@@ -100,4 +85,4 @@ cargo test -p lanes-core
 cargo check -p lanes-desktop
 ```
 
-The source is MIT licensed. Issues and pull requests are welcome.
+Issues and pull requests are welcome. The project is [MIT licensed](LICENSE).
