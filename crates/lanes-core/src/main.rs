@@ -1,6 +1,6 @@
 use lanes_core::{
     all_lanes, data_dir, detect, discover, ensure, finish, launch_in, port_available,
-    process_alive, prune, stop, Lane, Result,
+    process_alive, processes_alive, prune, stop, Lane, Result,
 };
 use std::env;
 use std::io;
@@ -192,12 +192,13 @@ fn real_main() -> Result<i32> {
                 println!("No lanes yet. Run `lanes run` in a Git worktree.");
             } else {
                 println!("LANES\n");
-                for lane in &lanes {
+                let running = processes_alive(&lanes);
+                for (lane, is_running) in lanes.iter().zip(&running) {
                     println!(
                         "{:<24} {:<23} {}",
                         lane.branch,
                         lane.url(),
-                        if process_alive(lane) {
+                        if *is_running {
                             "● running"
                         } else {
                             "○ stopped"
@@ -207,7 +208,7 @@ fn real_main() -> Result<i32> {
                 println!(
                     "\n{} worktrees · {} running",
                     lanes.len(),
-                    lanes.iter().filter(|lane| process_alive(lane)).count()
+                    running.into_iter().filter(|is_running| *is_running).count()
                 );
             }
             Ok(0)

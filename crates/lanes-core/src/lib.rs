@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::Duration;
-use sysinfo::{Pid, ProcessStatus, System};
+use sysinfo::{Pid, ProcessRefreshKind, ProcessStatus, ProcessesToUpdate, System};
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 const FIRST_PORT: u16 = 4300;
@@ -285,12 +285,43 @@ fn process_alive_in(system: &System, lane: &Lane) -> bool {
     })
 }
 
+fn system_for_pids(pids: &[Pid]) -> System {
+    let mut system = System::new();
+    if !pids.is_empty() {
+        system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(pids),
+            true,
+            ProcessRefreshKind::nothing().without_tasks(),
+        );
+    }
+    system
+}
+
 pub fn process_alive(lane: &Lane) -> bool {
-    process_alive_in(&System::new_all(), lane)
+    let Some(pid) = lane.pid else { return false };
+    process_alive_in(&system_for_pids(&[Pid::from_u32(pid)]), lane)
+}
+
+pub fn processes_alive(lanes: &[Lane]) -> Vec<bool> {
+    let pids = lanes
+        .iter()
+        .filter_map(|lane| lane.pid.map(Pid::from_u32))
+        .collect::<Vec<_>>();
+    let system = system_for_pids(&pids);
+    lanes
+        .iter()
+        .map(|lane| process_alive_in(&system, lane))
+        .collect()
 }
 
 fn prune_missing_in(registry: &mut Registry) -> Vec<Lane> {
-    let system = System::new_all();
+    let pids = registry
+        .lanes
+        .iter()
+        .filter(|lane| !lane.path.is_dir())
+        .filter_map(|lane| lane.pid.map(Pid::from_u32))
+        .collect::<Vec<_>>();
+    let system = system_for_pids(&pids);
     let mut removed = Vec::new();
     registry.lanes.retain(|lane| {
         let stale = !lane.path.is_dir() && !process_alive_in(&system, lane);
@@ -314,9 +345,10 @@ pub fn prune() -> Result<Vec<Lane>> {
 }
 
 fn process_start(pid: u32) -> Option<u64> {
+    let pid = Pid::from_u32(pid);
     for _ in 0..10 {
-        let system = System::new_all();
-        if let Some(process) = system.process(Pid::from_u32(pid)) {
+        let system = system_for_pids(&[pid]);
+        if let Some(process) = system.process(pid) {
             return Some(process.start_time());
         }
         thread::sleep(Duration::from_millis(20));
