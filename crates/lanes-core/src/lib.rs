@@ -6,13 +6,15 @@ use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::net::TcpListener;
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::Duration;
-use sysinfo::{Pid, System};
+use sysinfo::{Pid, ProcessStatus, System};
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 const FIRST_PORT: u16 = 4300;
@@ -35,6 +37,8 @@ pub struct Lane {
     pub port: u16,
     pub pid: Option<u32>,
     pub process_started: Option<u64>,
+    #[serde(default)]
+    pub isolated_process_group: bool,
     pub command: Vec<String>,
 }
 
@@ -226,6 +230,7 @@ fn upsert(registry: &mut Registry, worktree: &Worktree) -> Result<usize> {
         port,
         pid: None,
         process_started: None,
+        isolated_process_group: false,
         command: Vec::new(),
     });
     Ok(registry.lanes.len() - 1)
@@ -269,9 +274,13 @@ pub fn process_alive(lane: &Lane) -> bool {
         return false;
     };
     let system = System::new_all();
-    system
-        .process(Pid::from_u32(pid))
-        .is_some_and(|process| process.start_time() == start)
+    system.process(Pid::from_u32(pid)).is_some_and(|process| {
+        process.start_time() == start
+            && !matches!(
+                process.status(),
+                ProcessStatus::Zombie | ProcessStatus::Dead
+            )
+    })
 }
 
 fn process_start(pid: u32) -> Option<u64> {
@@ -283,6 +292,85 @@ fn process_start(pid: u32) -> Option<u64> {
         thread::sleep(Duration::from_millis(20));
     }
     None
+}
+
+#[cfg(unix)]
+enum UnixTargets {
+    Group(i32),
+    Tree(Vec<(u32, u64)>),
+}
+
+#[cfg(unix)]
+impl UnixTargets {
+    fn for_lane(lane: &Lane) -> Self {
+        let pid = lane.pid.expect("running lane has a pid");
+        if lane.isolated_process_group {
+            return Self::Group(pid as i32);
+        }
+        let system = System::new_all();
+        let mut descendants = Vec::new();
+        fn visit(system: &System, parent: Pid, descendants: &mut Vec<(u32, u64)>) {
+            for (pid, process) in system.processes() {
+                if process.parent() == Some(parent) {
+                    visit(system, *pid, descendants);
+                    descendants.push((pid.as_u32(), process.start_time()));
+                }
+            }
+        }
+        visit(&system, Pid::from_u32(pid), &mut descendants);
+        descendants.push((
+            pid,
+            lane.process_started.expect("running lane has start time"),
+        ));
+        Self::Tree(descendants)
+    }
+
+    fn signal(&self, signal: i32) -> io::Result<()> {
+        match self {
+            Self::Group(pgid) => signal_unix(-*pgid, signal),
+            Self::Tree(targets) => {
+                let system = System::new_all();
+                for (pid, started) in targets {
+                    if system.process(Pid::from_u32(*pid)).is_some_and(|process| {
+                        process.start_time() == *started
+                            && !matches!(
+                                process.status(),
+                                ProcessStatus::Zombie | ProcessStatus::Dead
+                            )
+                    }) {
+                        signal_unix(*pid as i32, signal)?;
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+fn signal_unix(pid: i32, signal: i32) -> io::Result<()> {
+    if unsafe { libc::kill(pid, signal) } == 0 {
+        return Ok(());
+    }
+    let error = io::Error::last_os_error();
+    if error.raw_os_error() == Some(libc::ESRCH) {
+        Ok(())
+    } else {
+        Err(error)
+    }
+}
+
+fn wait_until_stopped(lane: &Lane, timeout: Duration) -> bool {
+    let started = std::time::Instant::now();
+    loop {
+        if !process_alive(lane) && port_available(lane.port) {
+            return true;
+        }
+        if started.elapsed() >= timeout {
+            return false;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
 }
 
 #[cfg(windows)]
@@ -316,6 +404,7 @@ fn build_command(
     worktree: &Worktree,
     directory: &Path,
     port: u16,
+    foreground: bool,
 ) -> Result<Command> {
     if args.is_empty() {
         return Err(io::Error::other("missing command").into());
@@ -348,6 +437,12 @@ fn build_command(
     command
         .current_dir(directory)
         .envs(lane_environment(&worktree.branch, port));
+    #[cfg(unix)]
+    if !foreground {
+        command.process_group(0);
+    }
+    #[cfg(not(unix))]
+    let _ = foreground;
     Ok(command)
 }
 
@@ -376,7 +471,7 @@ pub fn launch_in(
     }
     refresh_idle_port(&mut registry.data, index)?;
     let port = registry.data.lanes[index].port;
-    let mut command = build_command(args, worktree, directory, port)?;
+    let mut command = build_command(args, worktree, directory, port, foreground)?;
     if foreground {
         command
             .stdin(Stdio::inherit())
@@ -394,6 +489,7 @@ pub fn launch_in(
     let lane = &mut registry.data.lanes[index];
     lane.pid = Some(child.id());
     lane.process_started = process_start(child.id());
+    lane.isolated_process_group = cfg!(unix) && !foreground;
     lane.command = args.to_vec();
     registry.save()?;
     Ok((registry.data.lanes[index].clone(), child))
@@ -427,15 +523,28 @@ pub fn stop(path: &Path) -> Result<Lane> {
     if process_alive(lane) {
         let pid = lane.pid.expect("live lane has a pid");
         #[cfg(windows)]
-        let status = Command::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/T", "/F"])
-            .status()?;
-        #[cfg(not(windows))]
-        let status = Command::new("kill")
-            .args(["-TERM", &pid.to_string()])
-            .status()?;
-        if !status.success() {
-            return Err(io::Error::other(format!("failed to stop process {pid}")).into());
+        {
+            let status = Command::new("taskkill")
+                .args(["/PID", &pid.to_string(), "/T", "/F"])
+                .status()?;
+            if !status.success() {
+                return Err(io::Error::other(format!("failed to stop process {pid}")).into());
+            }
+        }
+        #[cfg(unix)]
+        {
+            let targets = UnixTargets::for_lane(lane);
+            targets.signal(libc::SIGTERM)?;
+            if !wait_until_stopped(lane, Duration::from_secs(4)) {
+                targets.signal(libc::SIGKILL)?;
+            }
+        }
+        if !wait_until_stopped(lane, Duration::from_secs(2)) {
+            return Err(io::Error::other(format!(
+                "process {pid} or port {} is still active after stop",
+                lane.port
+            ))
+            .into());
         }
     }
     lane.pid = None;
@@ -471,6 +580,7 @@ mod tests {
                 port: FIRST_PORT + 1,
                 pid: None,
                 process_started: None,
+                isolated_process_group: false,
                 command: vec![],
             }],
         };
@@ -538,9 +648,42 @@ mod tests {
             &worktree,
             &nested,
             4317,
+            true,
         )
         .unwrap();
         assert_eq!(command.get_current_dir(), Some(nested.as_path()));
+    }
+
+    #[test]
+    fn stop_waits_for_port_to_be_released() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let lane = Lane {
+            path: PathBuf::new(),
+            repository: String::new(),
+            common_dir: PathBuf::new(),
+            branch: String::new(),
+            port,
+            pid: None,
+            process_started: None,
+            isolated_process_group: false,
+            command: Vec::new(),
+        };
+        let releaser = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(300));
+            drop(listener);
+        });
+        assert!(wait_until_stopped(&lane, Duration::from_secs(2)));
+        releaser.join().unwrap();
+    }
+
+    #[test]
+    fn old_registry_lanes_default_to_ungrouped() {
+        let lane: Lane = serde_json::from_str(
+            r#"{"path":"/tmp/shop","repository":"shop","common_dir":"/tmp/shop/.git","branch":"main","port":4300,"pid":null,"process_started":null,"command":[]}"#,
+        )
+        .unwrap();
+        assert!(!lane.isolated_process_group);
     }
 
     #[cfg(windows)]
@@ -560,6 +703,7 @@ mod tests {
             &worktree,
             &worktree.path,
             4317,
+            true,
         )
         .unwrap()
         .output()

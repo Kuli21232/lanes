@@ -132,6 +132,7 @@ mod tests {
             port: 4317,
             pid: None,
             process_started: None,
+            isolated_process_group: false,
             command: Vec::new(),
         }
     }
