@@ -3,24 +3,34 @@ import { LineEdit, ScrollView } from "std-widgets.slint";
 export struct LaneRow {
     branch: string,
     url: string,
-    state: string,
+    running: bool,
     path: string,
-    port: string,
+    port: int,
 }
 
 export component AppWindow inherits Window {
     title: "Lanes";
-    width: 1120px;
-    height: 720px;
+    width: 1160px;
+    height: 740px;
     background: #0d1117;
 
     in-out property <[LaneRow]> lanes;
     in-out property <string> project-path;
     in-out property <string> command-text: "npm run dev";
     in-out property <string> message: "Ready";
+    in-out property <string> summary: "No worktrees loaded";
+    in-out property <bool> has-error: false;
+    in-out property <bool> log-visible: false;
+    in-out property <string> log-title: "";
+    in-out property <string> log-text: "";
+    in-out property <int> log-port: 0;
     callback refresh();
+    callback choose-project();
     callback run-lane(string);
     callback stop-lane(string);
+    callback open-url(string);
+    callback open-log(string, int);
+    callback refresh-log();
 
     HorizontalLayout {
         spacing: 0px;
@@ -45,7 +55,7 @@ export component AppWindow inherits Window {
                 Text { text: "Run every branch."; color: #8b949e; font-size: 13px; }
                 Text { text: "No port collisions."; color: #8b949e; font-size: 13px; }
                 Rectangle { vertical-stretch: 1; background: transparent; }
-                Text { text: "Native Rust + Slint"; color: #6e7681; font-size: 11px; }
+                Text { text: "Rust + native Slint"; color: #6e7681; font-size: 11px; }
             }
         }
 
@@ -57,7 +67,7 @@ export component AppWindow inherits Window {
                 VerticalLayout {
                     spacing: 4px;
                     Text { text: "Worktrees"; color: #f0f6fc; font-size: 28px; font-weight: 700; }
-                    Text { text: "Stable local URLs for every branch"; color: #8b949e; font-size: 13px; }
+                    Text { text: "Run every branch with its own stable local URL"; color: #8b949e; font-size: 13px; }
                 }
                 Rectangle { horizontal-stretch: 1; background: transparent; }
                 Rectangle {
@@ -82,8 +92,17 @@ export component AppWindow inherits Window {
                     padding: 16px;
                     spacing: 7px;
                     Text { text: "PROJECT DIRECTORY"; color: #8b949e; font-size: 11px; font-weight: 700; }
-                    LineEdit { text <=> root.project-path; height: 34px; }
-                    Text { text: "Enter any path inside a Git repository to discover its worktrees."; color: #8b949e; font-size: 11px; }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        LineEdit { text <=> root.project-path; height: 34px; horizontal-stretch: 1; }
+                        Rectangle {
+                            width: 92px; height: 34px;
+                            background: #21262d; border-width: 1px; border-color: #30363d; border-radius: 6px;
+                            Text { text: "Browse…"; color: #c9d1d9; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                            TouchArea { clicked => { root.choose-project(); } }
+                        }
+                    }
+                    Text { text: "Choose any folder inside a Git repository."; color: #8b949e; font-size: 11px; }
                 }
             }
 
@@ -101,7 +120,12 @@ export component AppWindow inherits Window {
                 }
             }
 
-            Text { text: "LANES  ·  " + root.lanes.length; color: #8b949e; font-size: 12px; font-weight: 700; }
+            HorizontalLayout {
+                height: 18px;
+                Text { text: "LANES  ·  " + root.lanes.length; color: #8b949e; font-size: 12px; font-weight: 700; }
+                Rectangle { horizontal-stretch: 1; background: transparent; }
+                Text { text: root.summary; color: #8b949e; font-size: 12px; }
+            }
             Rectangle {
                 background: #161b22;
                 border-width: 1px;
@@ -120,15 +144,25 @@ export component AppWindow inherits Window {
                             Text { text: "BRANCH"; color: #8b949e; font-size: 11px; font-weight: 700; horizontal-stretch: 2; vertical-alignment: center; }
                             Text { text: "LOCAL URL"; color: #8b949e; font-size: 11px; font-weight: 700; horizontal-stretch: 2; vertical-alignment: center; }
                             Text { text: "STATUS"; color: #8b949e; font-size: 11px; font-weight: 700; horizontal-stretch: 1; vertical-alignment: center; }
-                            Rectangle { width: 126px; background: transparent; }
+                            Rectangle { width: 224px; background: transparent; }
                         }
                     }
                     ScrollView {
                         vertical-stretch: 1;
                         VerticalLayout {
                             spacing: 0px;
+                            if root.lanes.length == 0: Rectangle {
+                                height: 200px;
+                                background: transparent;
+                                VerticalLayout {
+                                    padding: 34px;
+                                    spacing: 10px;
+                                    Text { text: "No worktrees to show"; color: #f0f6fc; font-size: 17px; font-weight: 600; horizontal-alignment: center; }
+                                    Text { text: "Choose a Git repository above, then run a branch."; color: #8b949e; font-size: 12px; horizontal-alignment: center; }
+                                }
+                            }
                             for lane in root.lanes: Rectangle {
-                                height: 56px;
+                                height: 58px;
                                 background: #161b22;
                                 border-width: 1px;
                                 border-color: #21262d;
@@ -138,18 +172,31 @@ export component AppWindow inherits Window {
                                     spacing: 12px;
                                     Text { text: "⑂  " + lane.branch; color: #f0f6fc; font-size: 13px; font-weight: 600; horizontal-stretch: 2; vertical-alignment: center; overflow: elide; }
                                     Text { text: lane.url; color: #58a6ff; font-size: 13px; horizontal-stretch: 2; vertical-alignment: center; }
-                                    Text { text: lane.state; color: lane.state == "● running" ? #3fb950 : #8b949e; font-size: 12px; horizontal-stretch: 1; vertical-alignment: center; }
+                                    Text { text: lane.running ? "● running" : "○ stopped"; color: lane.running ? #3fb950 : #8b949e; font-size: 12px; horizontal-stretch: 1; vertical-alignment: center; }
                                     Rectangle {
-                                        width: 58px; height: 28px;
-                                        background: #238636; border-radius: 5px;
-                                        Text { text: "Run"; color: white; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
-                                        TouchArea { clicked => { root.run-lane(lane.path); } }
+                                        width: 48px; height: 28px;
+                                        background: lane.running ? #21262d : #238636; border-radius: 5px;
+                                        border-width: lane.running ? 1px : 0px; border-color: #30363d;
+                                        Text { text: "Run"; color: lane.running ? #6e7681 : white; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                                        if !lane.running: TouchArea { clicked => { root.run-lane(lane.path); } }
+                                    }
+                                    Rectangle {
+                                        width: 48px; height: 28px;
+                                        background: lane.running ? #30363d : #21262d; border-radius: 5px;
+                                        Text { text: "Stop"; color: lane.running ? #c9d1d9 : #6e7681; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                                        if lane.running: TouchArea { clicked => { root.stop-lane(lane.path); } }
+                                    }
+                                    Rectangle {
+                                        width: 48px; height: 28px;
+                                        background: #21262d; border-width: 1px; border-color: #30363d; border-radius: 5px;
+                                        Text { text: "Logs"; color: #c9d1d9; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                                        TouchArea { clicked => { root.open-log(lane.branch, lane.port); } }
                                     }
                                     Rectangle {
                                         width: 58px; height: 28px;
-                                        background: #30363d; border-radius: 5px;
-                                        Text { text: "Stop"; color: #c9d1d9; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
-                                        TouchArea { clicked => { root.stop-lane(lane.path); } }
+                                        background: lane.running ? #21262d : #161b22; border-width: 1px; border-color: #30363d; border-radius: 5px;
+                                        Text { text: "Open ↗"; color: lane.running ? #58a6ff : #6e7681; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                                        if lane.running: TouchArea { clicked => { root.open-url(lane.url); } }
                                     }
                                 }
                             }
@@ -157,7 +204,52 @@ export component AppWindow inherits Window {
                     }
                 }
             }
-            Text { text: root.message; color: #8b949e; font-size: 12px; }
+            Text { text: root.message; color: root.has-error ? #f85149 : #8b949e; font-size: 12px; overflow: elide; }
+        }
+    }
+
+    if root.log-visible: Rectangle {
+        x: 0px; y: 0px; width: parent.width; height: parent.height;
+        background: #010409bb;
+        TouchArea { clicked => { root.log-visible = false; } }
+    }
+    if root.log-visible: Rectangle {
+        x: 90px; y: 82px; width: parent.width - 180px; height: parent.height - 164px;
+        background: #161b22; border-width: 1px; border-color: #30363d; border-radius: 9px;
+        VerticalLayout {
+            padding: 20px;
+            spacing: 14px;
+            HorizontalLayout {
+                height: 32px;
+                VerticalLayout {
+                    spacing: 3px;
+                    Text { text: "PROCESS LOG"; color: #8b949e; font-size: 10px; font-weight: 700; }
+                    Text { text: root.log-title; color: #f0f6fc; font-size: 18px; font-weight: 700; }
+                }
+                Rectangle { horizontal-stretch: 1; background: transparent; }
+                Rectangle {
+                    width: 68px; height: 30px; background: #21262d; border-width: 1px; border-color: #30363d; border-radius: 5px;
+                    Text { text: "Refresh"; color: #c9d1d9; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                    TouchArea { clicked => { root.refresh-log(); } }
+                }
+                Rectangle {
+                    width: 52px; height: 30px; background: #21262d; border-width: 1px; border-color: #30363d; border-radius: 5px;
+                    Text { text: "Close"; color: #c9d1d9; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                    TouchArea { clicked => { root.log-visible = false; } }
+                }
+            }
+            Rectangle { height: 1px; background: #30363d; }
+            ScrollView {
+                vertical-stretch: 1;
+                Text {
+                    text: root.log-text;
+                    color: #c9d1d9;
+                    font-family: "Consolas";
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+            }
+            Text { text: "Showing the last 64 KiB · updates every 4 seconds"; color: #6e7681; font-size: 11px; }
         }
     }
 }

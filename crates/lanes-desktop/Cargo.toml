@@ -10,6 +10,11 @@ build = "build.rs"
 lanes-core = { path = "../lanes-core" }
 slint = { version = "=1.17.1", default-features = false, features = ["std", "backend-winit", "backend-winit-x11", "backend-winit-wayland", "renderer-software", "compat-1-2"] }
 shell-words = "1.1"
+rfd = { version = "=0.17.2", default-features = false, features = ["xdg-portal"] }
+webbrowser = "=1.2.4"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_Shell"] }
 
 [build-dependencies]
 slint-build = "=1.17.1"
