@@ -404,7 +404,7 @@ fn wait_until_stopped(lane: &Lane, timeout: Duration) -> bool {
 }
 
 #[cfg(windows)]
-fn windows_script(executable: &str) -> bool {
+fn windows_script(executable: &str, directory: &Path) -> bool {
     let path = Path::new(executable);
     if let Some(extension) = path.extension() {
         return matches!(
@@ -412,10 +412,16 @@ fn windows_script(executable: &str) -> bool {
             "cmd" | "bat"
         );
     }
-    let directories = if path.components().count() > 1 {
+    let directories = if path.is_absolute() {
         vec![PathBuf::new()]
+    } else if path.components().count() > 1 {
+        vec![directory.to_path_buf()]
     } else {
-        std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()).collect()
+        std::iter::once(directory.to_path_buf())
+            .chain(std::env::split_paths(
+                &std::env::var_os("PATH").unwrap_or_default(),
+            ))
+            .collect()
     };
     for directory in directories {
         let candidate = directory.join(path);
@@ -441,7 +447,7 @@ fn build_command(
     }
     #[cfg(windows)]
     let mut command = {
-        if windows_script(&args[0]) {
+        if windows_script(&args[0], directory) {
             // npm and similar package managers are .cmd shims.
             let line = args
                 .iter()
@@ -842,6 +848,35 @@ mod tests {
         };
         let output = build_command(
             &[script.to_string_lossy().into_owned(), "hello world".into()],
+            &worktree,
+            &worktree.path,
+            4317,
+            true,
+        )
+        .unwrap()
+        .output()
+        .unwrap();
+        assert!(output.status.success());
+        assert_eq!(
+            String::from_utf8(output.stdout).unwrap().trim(),
+            "4317:hello world"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn cmd_shim_without_extension_resolves_from_worktree() {
+        let temporary = tempfile::tempdir().unwrap();
+        let script = temporary.path().join("lanes_worktree_script.cmd");
+        fs::write(&script, "@echo off\r\necho %PORT%:%~1\r\n").unwrap();
+        let worktree = Worktree {
+            path: temporary.path().to_path_buf(),
+            repository: "test".into(),
+            common_dir: PathBuf::new(),
+            branch: "feature/test".into(),
+        };
+        let output = build_command(
+            &["lanes_worktree_script".into(), "hello world".into()],
             &worktree,
             &worktree.path,
             4317,
