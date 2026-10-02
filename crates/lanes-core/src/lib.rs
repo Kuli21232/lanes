@@ -477,8 +477,11 @@ fn build_command(
     if !foreground {
         command.process_group(0);
     }
-    #[cfg(not(unix))]
-    let _ = foreground;
+    #[cfg(windows)]
+    if !foreground {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
     Ok(command)
 }
 
