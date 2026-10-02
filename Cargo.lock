@@ -2436,7 +2436,7 @@ dependencies = [
 
 [[package]]
 name = "lanes-core"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "dirs",
  "fs2",
@@ -2449,7 +2449,7 @@ dependencies = [
 
 [[package]]
 name = "lanes-desktop"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "lanes-core",
  "rfd",
