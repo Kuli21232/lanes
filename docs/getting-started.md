@@ -92,7 +92,7 @@ The [branch demo](../examples/branch-demo/README.md) is a small Node.js HTTP ser
 
 ## Use the desktop app
 
-Start `lanes-desktop` from the release archive. Select any folder inside your Git repository with **Browse…**. Lanes lists the repository's worktrees. Enter a run command such as `npm run dev`, then click **Run** on a row. Use **Logs** to inspect the command's output and **Open** to visit its URL.
+Start `lanes-desktop` from the release archive. Select any folder inside your Git repository with **Browse…**, paste its path and click **Refresh**, or launch `lanes-desktop /path/to/project`. Lanes lists the repository's worktrees and remembers the selected project for the next launch. Enter a run command such as `npm run dev`, then click **Run** on a row. Use **Logs** to inspect the command's output and **Open** to visit its URL.
 
 The desktop command runs from the selected worktree's root. If your server lives in a subdirectory, use a project script that changes to it, or run the CLI from that subdirectory. See the [desktop guide](desktop.md).
 

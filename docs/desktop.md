@@ -10,7 +10,13 @@ The release archive contains `lanes-desktop` next to `lanes` (`.exe` on Windows)
 cargo run -p lanes-desktop
 ```
 
-Git must be installed and available on `PATH`. The app initially uses its current directory as the project directory. If that is not a Git repository, choose one with **Browse…** or enter its path and click **Refresh**.
+Git must be installed and available on `PATH`. You can pass a repository directory when launching the app:
+
+```sh
+lanes-desktop /path/to/project
+```
+
+Without an argument, the app uses its current directory if it is a Git repository, then the last successfully opened project. On first launch from a release folder, choose a repository with **Browse…** or paste its path into **Project directory** and click **Refresh**. The app remembers that directory for the next launch.
 
 ## Controls
 

@@ -65,7 +65,7 @@ Launch `lanes-desktop` from the extracted archive, or build and run it from sour
 cargo run -p lanes-desktop
 ```
 
-Choose a folder inside your repository. The app lists its worktrees and their URLs. Set a run command, then use **Run**, **Stop**, **Logs**, and **Open** on each row. It refreshes process state every four seconds. Commands launched from the desktop app run from the worktree root; CLI commands run from the directory where you invoke `lanes`.
+Choose a folder inside your repository or launch `lanes-desktop /path/to/project`. The app remembers the last opened project and lists its worktrees and URLs. Set a run command, then use **Run**, **Stop**, **Logs**, and **Open** on each row. It refreshes process state every four seconds. Commands launched from the desktop app run from the worktree root; CLI commands run from the directory where you invoke `lanes`.
 
 See the [desktop guide](docs/desktop.md) for controls, command parsing, and log locations.
 
