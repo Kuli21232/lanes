@@ -4,15 +4,50 @@ slint::include_modules!();
 
 use lanes_core::{data_dir, detect, discover, finish, launch, process_alive, stop, Lane, Result};
 use slint::{ModelRc, Timer, TimerMode, VecModel};
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{ErrorKind, Read, Seek, SeekFrom};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 const LOG_TAIL_BYTES: u64 = 64 * 1024;
+const LAST_PROJECT_FILE: &str = "desktop-project.txt";
+
+fn remembered_project() -> Option<PathBuf> {
+    let path = PathBuf::from(fs::read_to_string(data_dir().ok()?.join(LAST_PROJECT_FILE)).ok()?);
+    detect(&path).ok().map(|_| path)
+}
+
+fn initial_project() -> Option<PathBuf> {
+    std::env::args_os()
+        .nth(1)
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::current_dir()
+                .ok()
+                .filter(|path| detect(path).is_ok())
+        })
+        .or_else(remembered_project)
+}
+
+fn remember_project(path: &Path) -> Result<()> {
+    let home = data_dir()?;
+    fs::create_dir_all(&home)?;
+    fs::write(
+        home.join(LAST_PROJECT_FILE),
+        path.to_string_lossy().as_bytes(),
+    )?;
+    Ok(())
+}
 
 fn refresh(ui: &AppWindow, announce: bool) {
     let path = ui.get_project_path().to_string();
+    if path.trim().is_empty() {
+        ui.set_lanes(ModelRc::new(VecModel::default()));
+        ui.set_summary("No worktrees loaded".into());
+        ui.set_message("Choose a Git repository to get started".into());
+        ui.set_has_error(false);
+        return;
+    }
     match discover(Path::new(&path)) {
         Ok(lanes) => {
             let mut running = 0;
@@ -33,8 +68,18 @@ fn refresh(ui: &AppWindow, announce: bool) {
             ui.set_lanes(ModelRc::new(VecModel::from(rows)));
             ui.set_summary(format!("{} worktrees  ·  {running} running", lanes.len()).into());
             if announce {
-                ui.set_message("Worktrees refreshed".into());
-                ui.set_has_error(false);
+                match remember_project(Path::new(&path)) {
+                    Ok(()) => {
+                        ui.set_message("Worktrees refreshed".into());
+                        ui.set_has_error(false);
+                    }
+                    Err(error) => {
+                        ui.set_message(
+                            format!("Worktrees loaded, but folder was not saved: {error}").into(),
+                        );
+                        ui.set_has_error(true);
+                    }
+                }
             } else if ui.get_message().starts_with("Could not load worktrees:") {
                 ui.set_message("Ready".into());
                 ui.set_has_error(false);
@@ -135,12 +180,9 @@ fn refresh_log(ui: &AppWindow) {
 
 fn main() -> Result<()> {
     let ui = AppWindow::new()?;
-    ui.set_project_path(
-        std::env::current_dir()?
-            .to_string_lossy()
-            .into_owned()
-            .into(),
-    );
+    if let Some(path) = initial_project() {
+        ui.set_project_path(path.to_string_lossy().into_owned().into());
+    }
 
     let weak = ui.as_weak();
     ui.on_refresh(move || {
@@ -152,11 +194,7 @@ fn main() -> Result<()> {
     let weak = ui.as_weak();
     ui.on_choose_project(move || {
         if let Some(ui) = weak.upgrade() {
-            let current = ui.get_project_path().to_string();
-            let mut dialog = rfd::FileDialog::new().set_title("Select a Git worktree");
-            if Path::new(&current).is_dir() {
-                dialog = dialog.set_directory(&current);
-            }
+            let dialog = rfd::FileDialog::new().set_title("Select a Git worktree");
             if let Some(path) = dialog.pick_folder() {
                 ui.set_project_path(path.to_string_lossy().into_owned().into());
                 refresh(&ui, true);
@@ -225,7 +263,7 @@ fn main() -> Result<()> {
         }
     });
 
-    refresh(&ui, false);
+    refresh(&ui, true);
     let refresh_timer = Timer::default();
     let weak = ui.as_weak();
     refresh_timer.start(TimerMode::Repeated, Duration::from_secs(4), move || {

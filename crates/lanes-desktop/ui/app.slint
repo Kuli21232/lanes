@@ -101,7 +101,7 @@ export component AppWindow inherits Window {
                             TouchArea { clicked => { root.choose-project(); } }
                         }
                     }
-                    Text { text: "Choose any folder inside a Git repository."; color: #8b949e; font-size: 11px; }
+                    Text { text: "Choose a folder, or paste a path and press Refresh."; color: #8b949e; font-size: 11px; }
                 }
             }
 
@@ -241,11 +241,16 @@ export component AppWindow inherits Window {
             ScrollView {
                 vertical-stretch: 1;
                 Text {
+                    x: 0px;
+                    y: 0px;
+                    width: parent.width;
                     text: root.log-text;
                     color: #c9d1d9;
                     font-family: "Consolas";
                     font-size: 12px;
                     wrap: word-wrap;
+                    horizontal-alignment: left;
+                    vertical-alignment: top;
                 }
             }
             Text { text: "Showing the last 64 KiB · updates every 4 seconds"; color: #6e7681; font-size: 11px; }
