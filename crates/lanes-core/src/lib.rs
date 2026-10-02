@@ -6,6 +6,8 @@ use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::net::TcpListener;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::thread;
@@ -259,28 +261,54 @@ fn process_start(pid: u32) -> Option<u64> {
     None
 }
 
+#[cfg(windows)]
+fn windows_script(executable: &str) -> bool {
+    let path = Path::new(executable);
+    if let Some(extension) = path.extension() {
+        return matches!(
+            extension.to_string_lossy().to_ascii_lowercase().as_str(),
+            "cmd" | "bat"
+        );
+    }
+    let directories = if path.components().count() > 1 {
+        vec![PathBuf::new()]
+    } else {
+        std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()).collect()
+    };
+    for directory in directories {
+        let candidate = directory.join(path);
+        if candidate.with_extension("exe").is_file() || candidate.with_extension("com").is_file() {
+            return false;
+        }
+        if candidate.with_extension("cmd").is_file() || candidate.with_extension("bat").is_file() {
+            return true;
+        }
+    }
+    false
+}
+
 fn build_command(args: &[String], worktree: &Worktree, port: u16) -> Result<Command> {
     if args.is_empty() {
         return Err(io::Error::other("missing command").into());
     }
     #[cfg(windows)]
     let mut command = {
-        // npm, pnpm and other Windows package managers are .cmd shims.
-        let mut shell = Command::new("cmd");
-        shell.arg("/D").arg("/S").arg("/C");
-        let line = args
-            .iter()
-            .map(|arg| {
-                if arg.contains([' ', '\t', '"']) {
-                    format!("\"{}\"", arg.replace('"', "\"\""))
-                } else {
-                    arg.clone()
-                }
-            })
-            .collect::<Vec<_>>()
-            .join(" ");
-        shell.arg(line);
-        shell
+        if windows_script(&args[0]) {
+            // npm and similar package managers are .cmd shims.
+            let line = args
+                .iter()
+                .map(|arg| format!("\"{}\"", arg.replace('"', "\"\"")))
+                .collect::<Vec<_>>()
+                .join(" ");
+            let mut shell = Command::new("cmd");
+            shell.arg("/D").arg("/S").arg("/C");
+            shell.raw_arg(format!(" \"{line}\""));
+            shell
+        } else {
+            let mut process = Command::new(&args[0]);
+            process.args(&args[1..]);
+            process
+        }
     };
     #[cfg(not(windows))]
     let mut command = {
@@ -458,5 +486,32 @@ mod tests {
             second.iter().map(|lane| lane.port).collect::<Vec<_>>()
         );
         std::env::remove_var("LANES_HOME");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn cmd_shim_preserves_quoted_arguments_and_port() {
+        let temporary = tempfile::tempdir().unwrap();
+        let script = temporary.path().join("dev script.cmd");
+        fs::write(&script, "@echo off\r\necho %PORT%:%~1\r\n").unwrap();
+        let worktree = Worktree {
+            path: temporary.path().to_path_buf(),
+            repository: "test".into(),
+            common_dir: PathBuf::new(),
+            branch: "feature/test".into(),
+        };
+        let output = build_command(
+            &[script.to_string_lossy().into_owned(), "hello world".into()],
+            &worktree,
+            4317,
+        )
+        .unwrap()
+        .output()
+        .unwrap();
+        assert!(output.status.success());
+        assert_eq!(
+            String::from_utf8(output.stdout).unwrap().trim(),
+            "4317:hello world"
+        );
     }
 }
