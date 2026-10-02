@@ -32,7 +32,7 @@ Lanes includes a Rust CLI and a native desktop app built with [Slint](https://sl
 
 Your server must read `PORT` or be configured to use it. Lanes cannot change a port hardcoded inside the server. For a working example that needs no npm packages, try the [four-worktree demo](examples/branch-demo/README.md).
 
-**New to worktrees?** The [getting started guide](docs/getting-started.md) covers installation, creating a second worktree, and checking that both servers respond.
+**New to worktrees?** The [getting started guide](docs/getting-started.md) covers installation, creating a second worktree, and opening both local URLs.
 
 ## Commands
 

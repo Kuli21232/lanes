@@ -18,7 +18,7 @@ If your app binds only to a different interface or uses HTTPS, its actual addres
 
 ## A port changed between runs
 
-A stopped worktree normally keeps its reserved port. If another program occupies it when `run`, `env`, or `doctor` prepares that lane, Lanes selects a free replacement. `lanes status` can show the old reservation until the lane is prepared again. Stop the other program if you need the previous port and verify the current assignment with `lanes env`.
+A stopped worktree normally keeps its reserved port. If another program occupies it when `run`, `env`, or `doctor` prepares that lane, Lanes selects a free replacement. `lanes status` can show the old reservation until the lane is prepared again. Stop a conflicting program before preparing the lane if you need its old port. Once Lanes has moved to a replacement, that new port becomes its reservation. Check the current assignment with `lanes env`.
 
 ## “Already running”
 
