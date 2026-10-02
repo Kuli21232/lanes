@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="680" viewBox="0 0 1280 680" role="img" aria-labelledby="title description">
+  <title id="title">Four Git worktrees, four local URLs</title>
+  <desc id="description">Lanes assigns a stable port to each worktree so main, auth, payments, and dashboard can run at the same time.</desc>
+  <defs>
+    <linearGradient id="surface" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101722"/>
+      <stop offset="1" stop-color="#0b111a"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#58a6ff"/>
+      <stop offset="1" stop-color="#a371f7"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#243143" stroke-opacity=".28" stroke-width="1"/>
+    </pattern>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="14" stdDeviation="20" flood-color="#010409" flood-opacity=".5"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="680" rx="24" fill="url(#surface)"/>
+  <rect width="1280" height="680" rx="24" fill="url(#grid)"/>
+  <rect x="1" y="1" width="1278" height="678" rx="23" fill="none" stroke="#303d50" stroke-width="2"/>
+
+  <rect x="52" y="44" width="121" height="34" rx="17" fill="#1b3047" stroke="#376792"/>
+  <path d="M 72 55 v12 M 79 55 v12 M 86 55 v12" stroke="#58a6ff" stroke-width="3" stroke-linecap="round"/>
+  <text x="102" y="66" fill="#dbeafe" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="15" font-weight="700" dominant-baseline="middle">LANES</text>
+  <text x="52" y="134" fill="#f0f6fc" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="39" font-weight="750">Run every branch.</text>
+  <text x="52" y="179" fill="#b7c7d9" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="31" font-weight="600">No port collisions.</text>
+
+  <rect x="52" y="219" width="1176" height="375" rx="17" fill="#131c28" stroke="#304158" filter="url(#shadow)"/>
+  <rect x="53" y="220" width="1174" height="48" rx="16" fill="#1b2736"/>
+  <path d="M 53 253 V268 H1227 V253" fill="#1b2736"/>
+  <circle cx="77" cy="244" r="5" fill="#f85149"/>
+  <circle cx="95" cy="244" r="5" fill="#d29922"/>
+  <circle cx="113" cy="244" r="5" fill="#3fb950"/>
+  <text x="145" y="245" fill="#a8b7ca" font-family="Consolas, SFMono-Regular, monospace" font-size="14" dominant-baseline="middle">shop  /  worktrees</text>
+  <rect x="1001" y="229" width="184" height="29" rx="14" fill="#153522" stroke="#2d6b3e"/>
+  <circle cx="1021" cy="244" r="5" fill="#3fb950"/>
+  <text x="1036" y="245" fill="#8be49d" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="13" font-weight="650" dominant-baseline="middle">4 branches running</text>
+
+  <text x="87" y="308" fill="#8b9db1" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="12" font-weight="700" letter-spacing="2">WORKTREE</text>
+  <text x="702" y="308" fill="#8b9db1" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="12" font-weight="700" letter-spacing="2">LOCAL URL</text>
+  <path d="M 87 323 H1193" stroke="#29384a"/>
+
+  <path d="M 110 352 V531" stroke="#41688b" stroke-width="3"/>
+  <path d="M 110 352 C110 373 130 377 145 377 M110 411 C110 432 130 436 145 436 M110 470 C110 491 130 495 145 495 M110 529 C110 550 130 554 145 554" fill="none" stroke="#41688b" stroke-width="3" stroke-linecap="round"/>
+
+  <g font-family="Segoe UI, Inter, Arial, sans-serif" font-size="19" font-weight="650" dominant-baseline="middle">
+    <circle cx="110" cy="352" r="7" fill="#58a6ff"/>
+    <text x="157" y="377" fill="#f0f6fc">main</text>
+    <circle cx="110" cy="411" r="7" fill="#a371f7"/>
+    <text x="157" y="436" fill="#f0f6fc">feature/auth</text>
+    <circle cx="110" cy="470" r="7" fill="#3fb950"/>
+    <text x="157" y="495" fill="#f0f6fc">feature/payments</text>
+    <circle cx="110" cy="529" r="7" fill="#d29922"/>
+    <text x="157" y="554" fill="#f0f6fc">feature/dashboard</text>
+  </g>
+
+  <path d="M 442 376 H642 M442 435 H642 M442 494 H642 M442 553 H642" stroke="#39516b" stroke-width="2" stroke-dasharray="5 8"/>
+  <path d="m 641 372 8 4 -8 4 m 0 51 8 4 -8 4 m 0 55 8 4 -8 4 m 0 55 8 4 -8 4" fill="none" stroke="#7092b6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <g font-family="Consolas, SFMono-Regular, monospace" font-size="19" dominant-baseline="middle">
+    <rect x="690" y="348" width="482" height="51" rx="9" fill="#0e1823" stroke="#2d4159"/>
+    <rect x="690" y="407" width="482" height="51" rx="9" fill="#0e1823" stroke="#2d4159"/>
+    <rect x="690" y="466" width="482" height="51" rx="9" fill="#0e1823" stroke="#2d4159"/>
+    <rect x="690" y="525" width="482" height="51" rx="9" fill="#0e1823" stroke="#2d4159"/>
+    <text x="715" y="376" fill="#87c3ff">http://localhost:</text><text x="918" y="376" fill="#f0f6fc" font-weight="700">4300</text>
+    <text x="715" y="435" fill="#87c3ff">http://localhost:</text><text x="918" y="435" fill="#f0f6fc" font-weight="700">4301</text>
+    <text x="715" y="494" fill="#87c3ff">http://localhost:</text><text x="918" y="494" fill="#f0f6fc" font-weight="700">4302</text>
+    <text x="715" y="553" fill="#87c3ff">http://localhost:</text><text x="918" y="553" fill="#f0f6fc" font-weight="700">4303</text>
+  </g>
+  <g fill="#3fb950">
+    <circle cx="1133" cy="376" r="6"/><circle cx="1133" cy="435" r="6"/><circle cx="1133" cy="494" r="6"/><circle cx="1133" cy="553" r="6"/>
+  </g>
+
+  <text x="53" y="634" fill="#8b9db1" font-family="Consolas, SFMono-Regular, monospace" font-size="17">$ lanes run npm run dev</text>
+  <text x="1043" y="634" fill="#8be49d" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="15" font-weight="650">0 collisions</text>
+</svg>

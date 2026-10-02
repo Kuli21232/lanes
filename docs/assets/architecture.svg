@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="610" viewBox="0 0 1280 610" role="img" aria-labelledby="title description">
+  <title id="title">Lanes architecture</title>
+  <desc id="description">The CLI and native desktop app share a Rust core that identifies Git worktrees, reserves ports in a locked local registry, and starts commands with lane environment variables.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d1117"/>
+      <stop offset="1" stop-color="#101b2a"/>
+    </linearGradient>
+    <linearGradient id="core" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#152f4b"/>
+      <stop offset="1" stop-color="#1e2447"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="610" rx="24" fill="url(#background)"/>
+  <rect x="1" y="1" width="1278" height="608" rx="23" fill="none" stroke="#303d50" stroke-width="2"/>
+
+  <text x="52" y="66" fill="#f0f6fc" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="28" font-weight="750">How a lane starts</text>
+  <text x="52" y="96" fill="#9aadc3" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="15">The CLI and desktop app use the same Rust core and the same local registry.</text>
+
+  <rect x="52" y="154" width="206" height="150" rx="14" fill="#161b22" stroke="#36506a" stroke-width="2"/>
+  <rect x="75" y="178" width="44" height="31" rx="6" fill="#24374c"/>
+  <text x="83" y="199" fill="#8ccaff" font-family="Consolas, SFMono-Regular, monospace" font-size="18" font-weight="700">&gt;_</text>
+  <text x="75" y="244" fill="#f0f6fc" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="20" font-weight="700">CLI</text>
+  <text x="75" y="272" fill="#9aadc3" font-family="Consolas, SFMono-Regular, monospace" font-size="13">lanes run ...</text>
+
+  <rect x="52" y="322" width="206" height="150" rx="14" fill="#161b22" stroke="#36506a" stroke-width="2"/>
+  <rect x="75" y="346" width="45" height="32" rx="5" fill="#24374c" stroke="#58a6ff"/>
+  <path d="M 75 355 H120" stroke="#58a6ff"/>
+  <text x="75" y="413" fill="#f0f6fc" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="20" font-weight="700">Native desktop</text>
+  <text x="75" y="440" fill="#9aadc3" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="13">Rust + Slint</text>
+
+  <path d="M 258 229 H294 Q318 229 318 253 V311 H340 M258 397 H294 Q318 397 318 373 V311" fill="none" stroke="#5d89b5" stroke-width="3" stroke-linecap="round"/>
+  <path d="m 333 305 9 6 -9 6" fill="none" stroke="#7ab9f2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="344" y="154" width="555" height="318" rx="18" fill="url(#core)" stroke="#5d79a8" stroke-width="2"/>
+  <text x="372" y="194" fill="#dbebff" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="17" font-weight="750" letter-spacing="1">SHARED RUST CORE</text>
+  <path d="M 372 213 H870" stroke="#4a6487"/>
+
+  <rect x="372" y="239" width="145" height="143" rx="12" fill="#0f1d2d" stroke="#415e80"/>
+  <circle cx="398" cy="267" r="12" fill="#1f4770"/>
+  <text x="398" y="271" text-anchor="middle" fill="#d8ecff" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="12" font-weight="750">1</text>
+  <text x="391" y="306" fill="#f0f6fc" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700">Detect</text>
+  <text x="391" y="331" fill="#a9bed7" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="13">Git worktree</text>
+  <text x="391" y="350" fill="#a9bed7" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="13">and branch</text>
+
+  <rect x="548" y="239" width="145" height="143" rx="12" fill="#0f1d2d" stroke="#415e80"/>
+  <circle cx="574" cy="267" r="12" fill="#1f4770"/>
+  <text x="574" y="271" text-anchor="middle" fill="#d8ecff" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="12" font-weight="750">2</text>
+  <text x="567" y="306" fill="#f0f6fc" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700">Reserve</text>
+  <text x="567" y="331" fill="#a9bed7" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="13">free port</text>
+  <text x="567" y="350" fill="#a9bed7" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="13">4300–4999</text>
+
+  <rect x="724" y="239" width="145" height="143" rx="12" fill="#0f1d2d" stroke="#415e80"/>
+  <circle cx="750" cy="267" r="12" fill="#1f4770"/>
+  <text x="750" y="271" text-anchor="middle" fill="#d8ecff" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="12" font-weight="750">3</text>
+  <text x="743" y="306" fill="#f0f6fc" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700">Launch</text>
+  <text x="743" y="331" fill="#a9bed7" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="13">child command</text>
+  <text x="743" y="350" fill="#a9bed7" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="13">with env</text>
+
+  <path d="M 518 311 H546 M694 311 H722" stroke="#73b8f4" stroke-width="3"/>
+  <path d="m 537 305 9 6 -9 6 m 176 -12 9 6 -9 6" fill="none" stroke="#73b8f4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="372" y="408" width="497" height="42" rx="8" fill="#111a2b" stroke="#53638a"/>
+  <text x="391" y="435" fill="#afc0dc" font-family="Consolas, SFMono-Regular, monospace" font-size="14">registry.lock</text>
+  <text x="551" y="435" fill="#7790b2" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="14">+</text>
+  <text x="577" y="435" fill="#afc0dc" font-family="Consolas, SFMono-Regular, monospace" font-size="14">registry.json</text>
+  <text x="750" y="435" fill="#8be49d" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="13">local only</text>
+
+  <path d="M 899 311 H932" stroke="#7ab9f2" stroke-width="3"/>
+  <path d="m 924 305 9 6 -9 6" fill="none" stroke="#7ab9f2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="936" y="216" width="292" height="191" rx="16" fill="#12231d" stroke="#438455" stroke-width="2"/>
+  <circle cx="967" cy="248" r="7" fill="#3fb950"/>
+  <text x="985" y="254" fill="#96e6a7" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="15" font-weight="700">RUNNING LANE</text>
+  <text x="962" y="306" fill="#f0f6fc" font-family="Consolas, SFMono-Regular, monospace" font-size="18">PORT=4301</text>
+  <text x="962" y="340" fill="#f0f6fc" font-family="Consolas, SFMono-Regular, monospace" font-size="17">LANE=feature-auth</text>
+  <text x="962" y="378" fill="#8ccaff" font-family="Consolas, SFMono-Regular, monospace" font-size="15">localhost:4301</text>
+
+  <path d="M 52 518 H1228" stroke="#2f4055"/>
+  <text x="52" y="556" fill="#a9bed7" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="15">Identity: canonical worktree path</text>
+  <text x="481" y="556" fill="#a9bed7" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="15">Port: retained between runs</text>
+  <text x="870" y="556" fill="#a9bed7" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="15">URL: localhost + port</text>
+</svg>
