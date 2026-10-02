@@ -54,6 +54,9 @@ cargo run -p lanes-core --bin lanes -- run npm run dev
 | --- | --- |
 | `lanes run [command...]` | Run a command in the current worktree. Defaults to `npm run dev`. |
 | `lanes status` | Discover and display the repository's worktrees and their local URLs. |
+| `lanes env [--shell FORMAT]` | Print this worktree's `PORT`, `LANE_PORT`, `LANE` and `BASE_URL`. Formats: `dotenv`, `sh`, `powershell`. |
+| `lanes doctor [command...]` | Check Git, worktree detection, the registry, port availability and an optional executable. |
+| `lanes prune` | Release reservations for deleted, stopped worktrees. |
 | `lanes stop` | Stop the process Lanes started in the current worktree. |
 | `lanes` | Shortcut for `lanes status`. |
 
@@ -67,9 +70,11 @@ child.on("exit", code => process.exit(code ?? 1));
 
 Then point `npm run dev` at that script. Other tools, including many Node servers, already honor `PORT` directly.
 
+`lanes env` prints the same values without starting a process. For example, `lanes env --shell sh` produces `export` statements for a Unix shell, while `lanes env --shell powershell` produces PowerShell assignments. `lanes doctor npm` checks whether `npm` is available alongside the lane setup.
+
 ## Native desktop app
 
-The dashboard is a native [Slint](https://slint.dev/) window backed by the same Rust core as the CLI. It has no browser engine, HTML layer or WebView. Enter a path inside a Git repository, refresh the list, and run or stop a worktree with the configured command.
+The dashboard is a native [Slint](https://slint.dev/) window backed by the same Rust core as the CLI. It has no browser engine, HTML layer or WebView. Choose a Git repository, refresh its worktrees, and run or stop each one with the configured command. The window updates running states automatically, opens lane URLs in your browser and shows recent command output.
 
 ```sh
 cargo run -p lanes-desktop
@@ -83,7 +88,7 @@ The [branch demo](examples/branch-demo/README.md) is a zero-dependency Node serv
 
 ## How ports stay stable
 
-Lanes identifies a worktree by its canonical path. Its shared registry reserves one port in `4300–4999` per worktree. An interprocess file lock protects allocation. On launch, Lanes checks that the assigned port is available; if another application occupies it, Lanes assigns a new free port. Stopped worktrees retain their assignment. Deleting a worktree does not currently prune its reservation automatically.
+Lanes identifies a worktree by its canonical path. Its shared registry reserves one port in `4300–4999` per worktree. An interprocess file lock protects allocation. On launch, Lanes checks that the assigned port is available; if another application occupies it, Lanes assigns a new free port. Stopped worktrees retain their assignment. Run `lanes prune` after deleting worktrees to reclaim their reservations.
 
 The initial release manages one service port per worktree. It does not yet rewrite `.env` files, configure OAuth callbacks, proxy multiple services, or guarantee that a child application listens on `PORT`. Those are separate future capabilities.
 
