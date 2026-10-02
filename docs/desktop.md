@@ -1,6 +1,6 @@
 # Native desktop app
 
-The desktop app is a native Slint window backed by the same Rust core as the CLI. It uses a software renderer and a native window backend; it does not embed a browser or WebView. **Open** launches the URL in your system browser.
+The desktop app is a native Slint window backed by the same Rust core as the CLI. It prefers an OpenGL renderer and can fall back to software rendering; it does not embed a browser or WebView. **Open** launches the URL in your system browser.
 
 ## Start the app
 
@@ -24,7 +24,7 @@ Without an argument, the app uses its current directory if it is a Git repositor
 | --- | --- |
 | **Project directory** | Choose any folder inside a Git repository. Lanes discovers its worktrees through Git. |
 | **Run command** | Command and arguments used by **Run** for any worktree row; defaults to `npm run dev`. |
-| **Refresh** | Reload worktrees and tracked process state. The app also refreshes automatically every four seconds. |
+| **Refresh** | Reload worktrees and tracked process state in the background. The app also refreshes automatically every four seconds. |
 | **Run** | Start the command in that worktree's root directory with its lane environment. |
 | **Stop** | Stop the tracked command for that worktree. |
 | **Logs** | Show recent output from that row's desktop-launched command. |

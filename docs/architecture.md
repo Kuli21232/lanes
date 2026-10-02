@@ -39,7 +39,7 @@ Each registry operation takes an exclusive file lock. Changes are written to a t
 
 ## Process lifecycle
 
-`lanes run` launches a child in the caller's current directory with inherited terminal input and output. The desktop app launches from the worktree root, redirects output to a log file, and waits for the child in a background thread. Both record the child PID and start time so a recycled PID is not mistaken for the old process.
+`lanes run` launches a child in the caller's current directory with inherited terminal input and output. The desktop app launches from the worktree root, redirects output to a log file, and waits for the child in a background thread. Discovery, process checks, Run, and Stop also execute on a desktop worker so window input remains responsive. Both record the child PID and start time so a recycled PID is not mistaken for the old process.
 
 `lanes stop` only acts on a process recorded for the current worktree. On Unix it signals the child tree for foreground runs or the isolated process group for desktop runs, then waits for the port to be released. On Windows it uses `taskkill /T /F`. After stopping, the port reservation remains in place.
 
