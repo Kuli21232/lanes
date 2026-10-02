@@ -193,7 +193,9 @@ fn same_path(a: &Path, b: &Path) -> bool {
     }
 }
 
-fn port_available(port: u16) -> bool {
+/// Check whether a local IPv4 loopback port can be bound right now.
+/// This is a snapshot; another process can claim the port afterward.
+pub fn port_available(port: u16) -> bool {
     TcpListener::bind(("127.0.0.1", port)).is_ok()
 }
 
