@@ -77,6 +77,10 @@ cargo run -p lanes-desktop
 
 The desktop app writes background command output to `lane-PORT.log` in the Lanes data directory. The registry is stored in the same directory: `%LOCALAPPDATA%\Lanes` on Windows and the user data directory on Linux/macOS. Set `LANES_HOME` to override it.
 
+## Try four branches
+
+The [branch demo](examples/branch-demo/README.md) is a zero-dependency Node server that shows the current lane and port in a browser. Run it from four worktrees to see four stable URLs.
+
 ## How ports stay stable
 
 Lanes identifies a worktree by its canonical path. Its shared registry reserves one port in `4300–4999` per worktree. An interprocess file lock protects allocation. On launch, Lanes checks that the assigned port is available; if another application occupies it, Lanes assigns a new free port. Stopped worktrees retain their assignment. Deleting a worktree does not currently prune its reservation automatically.
