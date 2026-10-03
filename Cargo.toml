@@ -1,10 +1,10 @@
 [workspace]
-members = ["crates/lanes-core", "crates/lanes-desktop"]
+members = ["crates/lanes-core", "crates/lanes-desktop", "crates/lanes-installer"]
 default-members = ["crates/lanes-core"]
 resolver = "2"
 
 [workspace.package]
-version = "0.2.3"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/Kuli21232/lanes"

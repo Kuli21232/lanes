@@ -1,0 +1,119 @@
+import { LineEdit, CheckBox } from "std-widgets.slint";
+
+export component InstallerWindow inherits Window {
+    title: root.page == 4 ? "Uninstall Lanes" : "Install Lanes";
+    width: 760px;
+    height: 520px;
+    background: #0d1117;
+
+    in-out property <int> page: 0;
+    in-out property <string> location: "";
+    in-out property <bool> add-path: true;
+    in-out property <bool> desktop-shortcut: false;
+    in-out property <bool> launch-after: true;
+    in-out property <string> status: "";
+    in-out property <bool> has-error: false;
+    in-out property <int> progress: 0;
+    callback install(string, bool, bool);
+    callback uninstall();
+    callback launch-app();
+    callback close-installer();
+
+    Rectangle {
+        x: 0px; y: 0px; width: 8px; height: parent.height;
+        background: #2f81f7;
+    }
+    VerticalLayout {
+        padding-left: 52px; padding-right: 52px; padding-top: 38px; padding-bottom: 34px;
+        spacing: 18px;
+        HorizontalLayout {
+            spacing: 10px;
+            Rectangle { width: 12px; height: 24px; background: #2f81f7; border-radius: 3px; }
+            Text { text: "LANES"; color: #f0f6fc; font-size: 23px; font-weight: 800; }
+            Rectangle { horizontal-stretch: 1; background: transparent; }
+            Text { text: root.page == 4 ? "REMOVE" : "SETUP"; color: #8b949e; font-size: 11px; font-weight: 700; vertical-alignment: center; }
+        }
+        Rectangle { height: 1px; background: #30363d; }
+
+        if root.page == 0: VerticalLayout {
+            spacing: 18px;
+            Text { text: "Run every branch."; color: #f0f6fc; font-size: 36px; font-weight: 700; }
+            Text { text: "No port collisions."; color: #58a6ff; font-size: 36px; font-weight: 700; }
+            Text { text: "Install the native desktop app and CLI together. Lanes gives each Git worktree its own stable local port."; color: #c9d1d9; font-size: 15px; wrap: word-wrap; }
+            Rectangle { height: 94px; background: #161b22; border-width: 1px; border-color: #30363d; border-radius: 9px;
+                VerticalLayout { padding: 16px; spacing: 7px;
+                    Text { text: "WHAT YOU GET"; color: #8b949e; font-size: 10px; font-weight: 700; }
+                    Text { text: "✓  Native desktop app     ✓  lanes CLI     ✓  Quick setup"; color: #c9d1d9; font-size: 13px; }
+                }
+            }
+        }
+
+        if root.page == 1: VerticalLayout {
+            spacing: 14px;
+            Text { text: "Make Lanes yours"; color: #f0f6fc; font-size: 28px; font-weight: 700; }
+            Text { text: "Choose where to install Lanes and how to access it."; color: #8b949e; font-size: 14px; }
+            Text { text: "INSTALL LOCATION"; color: #8b949e; font-size: 11px; font-weight: 700; }
+            LineEdit { text <=> root.location; height: 38px; }
+            CheckBox { text: "Add lanes to my PATH for new terminals"; checked <=> root.add-path; }
+            CheckBox { text: "Create a desktop shortcut"; checked <=> root.desktop-shortcut; }
+            Text { text: "A Start menu shortcut and uninstall entry are always created."; color: #8b949e; font-size: 12px; }
+        }
+
+        if root.page == 2: VerticalLayout {
+            spacing: 20px;
+            Text { text: "Installing Lanes"; color: #f0f6fc; font-size: 28px; font-weight: 700; }
+            Text { text: "Setting up the app, CLI and Windows integration."; color: #8b949e; font-size: 14px; }
+            Rectangle { height: 14px; background: #21262d; border-radius: 7px;
+                Rectangle { width: parent.width * root.progress / 100; height: parent.height; background: #2f81f7; border-radius: 7px; }
+            }
+            Text { text: root.status; color: root.has-error ? #f85149 : #c9d1d9; font-size: 13px; wrap: word-wrap; }
+        }
+
+        if root.page == 3: VerticalLayout {
+            spacing: 20px;
+            Text { text: "You're ready to run."; color: #f0f6fc; font-size: 30px; font-weight: 700; }
+            Text { text: "Lanes is installed. Open the app to connect your Git repository and choose your run command."; color: #c9d1d9; font-size: 14px; wrap: word-wrap; }
+            Rectangle { height: 65px; background: #161b22; border-width: 1px; border-color: #30363d; border-radius: 7px;
+                Text { text: "Terminal:  lanes run npm run dev"; color: #58a6ff; font-family: "Consolas"; font-size: 14px; vertical-alignment: center; x: 18px; }
+            }
+            CheckBox { text: "Launch Lanes now"; checked <=> root.launch-after; }
+        }
+
+        if root.page == 4: VerticalLayout {
+            spacing: 20px;
+            Text { text: "Remove Lanes?"; color: #f0f6fc; font-size: 30px; font-weight: 700; }
+            Text { text: "This removes the app, CLI and shortcuts. Your worktree ports, logs and preferences stay in your local data folder."; color: #c9d1d9; font-size: 14px; wrap: word-wrap; }
+            Text { text: root.status; color: root.has-error ? #f85149 : #8b949e; font-size: 13px; wrap: word-wrap; }
+        }
+
+        Rectangle { vertical-stretch: 1; background: transparent; }
+        HorizontalLayout {
+            spacing: 10px;
+            Rectangle { horizontal-stretch: 1; background: transparent; }
+            if root.page == 1: Rectangle { width: 88px; height: 38px; background: #21262d; border-radius: 6px;
+                Text { text: "Back"; color: #c9d1d9; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                TouchArea { clicked => { root.page = 0; } }
+            }
+            if root.page == 2 && root.has-error: Rectangle { width: 110px; height: 38px; background: #21262d; border-radius: 6px;
+                Text { text: "Try again"; color: #c9d1d9; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                TouchArea { clicked => { root.page = 1; root.has-error = false; root.status = ""; } }
+            }
+            if root.page == 0: Rectangle { width: 130px; height: 38px; background: #238636; border-radius: 6px;
+                Text { text: "Get started"; color: white; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                TouchArea { clicked => { root.page = 1; } }
+            }
+            if root.page == 1: Rectangle { width: 130px; height: 38px; background: #238636; border-radius: 6px;
+                Text { text: "Install Lanes"; color: white; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                TouchArea { clicked => { root.install(root.location, root.add-path, root.desktop-shortcut); } }
+            }
+            if root.page == 3: Rectangle { width: 130px; height: 38px; background: #238636; border-radius: 6px;
+                Text { text: "Finish"; color: white; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                TouchArea { clicked => { if root.launch-after { root.launch-app(); } root.close-installer(); } }
+            }
+            if root.page == 4: Rectangle { width: 130px; height: 38px; background: #da3633; border-radius: 6px;
+                Text { text: "Remove Lanes"; color: white; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                TouchArea { clicked => { root.uninstall(); } }
+            }
+        }
+    }
+}

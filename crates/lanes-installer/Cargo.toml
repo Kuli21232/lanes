@@ -1,0 +1,22 @@
+[package]
+name = "lanes-installer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+build = "build.rs"
+
+[features]
+bundled = []
+
+[target.'cfg(windows)'.dependencies]
+slint = { version = "=1.17.1", default-features = false, features = ["std", "backend-winit", "renderer-femtovg", "renderer-software", "compat-1-2"] }
+winreg = "0.52"
+dirs = "6.0"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+
+[build-dependencies]
+slint-build = "=1.17.1"
+
+[dev-dependencies]
+tempfile = "3"
