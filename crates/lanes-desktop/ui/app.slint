@@ -6,6 +6,7 @@ export struct LaneRow {
     running: bool,
     path: string,
     port: int,
+    command: string,
 }
 
 export component AppWindow inherits Window {
@@ -24,6 +25,14 @@ export component AppWindow inherits Window {
     in-out property <string> log-title: "";
     in-out property <string> log-text: "";
     in-out property <int> log-port: 0;
+    in-out property <bool> guide-visible: false;
+    in-out property <bool> setup-visible: false;
+    in-out property <int> setup-step: 0;
+    in-out property <string> setup-message: "";
+    in-out property <bool> edit-visible: false;
+    in-out property <string> edit-path: "";
+    in-out property <string> edit-branch: "";
+    in-out property <string> edit-command: "";
     callback refresh();
     callback choose-project();
     callback run-lane(string);
@@ -31,6 +40,11 @@ export component AppWindow inherits Window {
     callback open-url(string);
     callback open-log(string, int);
     callback refresh-log();
+    callback save-default-command();
+    callback edit-lane(string, string);
+    callback save-lane-command();
+    callback reset-lane-command();
+    callback finish-setup();
 
     HorizontalLayout {
         spacing: 0px;
@@ -43,14 +57,21 @@ export component AppWindow inherits Window {
             VerticalLayout {
                 padding: 24px;
                 spacing: 20px;
-                Text { text: "◈  LANES"; color: #f0f6fc; font-size: 22px; font-weight: 800; }
+                Text { text: "LANES"; color: #f0f6fc; font-size: 22px; font-weight: 800; }
                 Rectangle { height: 1px; background: #30363d; }
                 Text { text: "WORKSPACE"; color: #8b949e; font-size: 11px; font-weight: 700; }
                 Rectangle {
                     height: 42px;
                     background: #1f6feb;
                     border-radius: 7px;
-                    Text { text: "▤   Worktrees"; color: white; font-size: 14px; vertical-alignment: center; x: 14px; }
+                    Text { text: "Worktrees"; color: white; font-size: 14px; vertical-alignment: center; x: 14px; }
+                }
+                Rectangle {
+                    height: 38px;
+                    background: transparent;
+                    border-radius: 7px;
+                    Text { text: "Quick guide"; color: #c9d1d9; font-size: 14px; vertical-alignment: center; x: 14px; }
+                    TouchArea { clicked => { root.guide-visible = true; } }
                 }
                 Text { text: "Run every branch."; color: #8b949e; font-size: 13px; }
                 Text { text: "No port collisions."; color: #8b949e; font-size: 13px; }
@@ -76,7 +97,7 @@ export component AppWindow inherits Window {
                     border-width: 1px;
                     border-color: #30363d;
                     border-radius: 6px;
-                    Text { text: "↻  Refresh"; color: #c9d1d9; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                    Text { text: "Refresh"; color: #c9d1d9; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
                     TouchArea { clicked => { root.refresh(); } }
                 }
             }
@@ -115,7 +136,15 @@ export component AppWindow inherits Window {
                     padding: 16px;
                     spacing: 8px;
                     Text { text: "RUN COMMAND"; color: #8b949e; font-size: 11px; font-weight: 700; }
-                    LineEdit { text <=> root.command-text; height: 34px; }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        LineEdit { text <=> root.command-text; height: 34px; horizontal-stretch: 1; }
+                        Rectangle {
+                            width: 68px; height: 34px; background: #238636; border-radius: 6px;
+                            Text { text: "Save"; color: white; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                            TouchArea { clicked => { root.save-default-command(); } }
+                        }
+                    }
                 }
             }
 
@@ -143,7 +172,7 @@ export component AppWindow inherits Window {
                             Text { text: "BRANCH"; color: #8b949e; font-size: 11px; font-weight: 700; horizontal-stretch: 2; vertical-alignment: center; }
                             Text { text: "LOCAL URL"; color: #8b949e; font-size: 11px; font-weight: 700; horizontal-stretch: 2; vertical-alignment: center; }
                             Text { text: "STATUS"; color: #8b949e; font-size: 11px; font-weight: 700; horizontal-stretch: 1; vertical-alignment: center; }
-                            Rectangle { width: 224px; background: transparent; }
+                            Rectangle { width: 276px; background: transparent; }
                         }
                     }
                     ScrollView {
@@ -161,7 +190,7 @@ export component AppWindow inherits Window {
                                 }
                             }
                             for lane in root.lanes: Rectangle {
-                                height: 58px;
+                                height: 66px;
                                 background: #161b22;
                                 border-width: 1px;
                                 border-color: #21262d;
@@ -169,9 +198,20 @@ export component AppWindow inherits Window {
                                     padding-left: 18px;
                                     padding-right: 18px;
                                     spacing: 12px;
-                                    Text { text: "⑂  " + lane.branch; color: #f0f6fc; font-size: 13px; font-weight: 600; horizontal-stretch: 2; vertical-alignment: center; overflow: elide; }
+                                    VerticalLayout {
+                                        horizontal-stretch: 2;
+                                        spacing: 2px;
+                                        Text { text: lane.branch; color: #f0f6fc; font-size: 13px; font-weight: 600; overflow: elide; }
+                                        Text { text: lane.command; color: #8b949e; font-size: 11px; overflow: elide; }
+                                    }
                                     Text { text: lane.url; color: #58a6ff; font-size: 13px; horizontal-stretch: 2; vertical-alignment: center; }
                                     Text { text: lane.running ? "● running" : "○ stopped"; color: lane.running ? #3fb950 : #8b949e; font-size: 12px; horizontal-stretch: 1; vertical-alignment: center; }
+                                    Rectangle {
+                                        width: 48px; height: 28px;
+                                        background: #21262d; border-width: 1px; border-color: #30363d; border-radius: 5px;
+                                        Text { text: "Edit"; color: #c9d1d9; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                                        TouchArea { clicked => { root.edit-lane(lane.path, lane.branch); } }
+                                    }
                                     Rectangle {
                                         width: 48px; height: 28px;
                                         background: lane.running ? #21262d : #238636; border-radius: 5px;
@@ -194,7 +234,7 @@ export component AppWindow inherits Window {
                                     Rectangle {
                                         width: 58px; height: 28px;
                                         background: lane.running ? #21262d : #161b22; border-width: 1px; border-color: #30363d; border-radius: 5px;
-                                        Text { text: "Open ↗"; color: lane.running ? #58a6ff : #6e7681; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                                        Text { text: "Open"; color: lane.running ? #58a6ff : #6e7681; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
                                         if lane.running: TouchArea { clicked => { root.open-url(lane.url); } }
                                     }
                                 }
@@ -254,6 +294,128 @@ export component AppWindow inherits Window {
                 }
             }
             Text { text: "Showing the last 64 KiB · updates every 4 seconds"; color: #6e7681; font-size: 11px; }
+        }
+    }
+
+    if root.guide-visible: Rectangle {
+        x: 0px; y: 0px; width: parent.width; height: parent.height;
+        background: #010409bb;
+        TouchArea { clicked => { root.guide-visible = false; } }
+    }
+    if root.guide-visible: Rectangle {
+        x: 250px; y: 140px; width: parent.width - 500px; height: parent.height - 280px;
+        background: #161b22; border-width: 1px; border-color: #30363d; border-radius: 12px;
+        VerticalLayout {
+            padding: 30px; spacing: 16px;
+            HorizontalLayout {
+                Text { text: "Quick guide"; color: #f0f6fc; font-size: 24px; font-weight: 700; }
+                Rectangle { horizontal-stretch: 1; background: transparent; }
+                Rectangle { width: 58px; height: 30px; background: #21262d; border-radius: 6px;
+                    Text { text: "Close"; color: #c9d1d9; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                    TouchArea { clicked => { root.guide-visible = false; } }
+                }
+            }
+            Text { text: "01  Choose a Git repository"; color: #58a6ff; font-size: 16px; font-weight: 700; }
+            Text { text: "Paste a path to any folder in your repository, then click Refresh. Lanes finds all of its worktrees."; color: #c9d1d9; font-size: 13px; wrap: word-wrap; }
+            Text { text: "02  Set the run command"; color: #58a6ff; font-size: 16px; font-weight: 700; }
+            Text { text: "The default command is used for every branch. Click Edit on a row to save a different command for that worktree."; color: #c9d1d9; font-size: 13px; wrap: word-wrap; }
+            Text { text: "03  Run and open"; color: #58a6ff; font-size: 16px; font-weight: 700; }
+            Text { text: "Run starts the command with PORT, LANE and BASE_URL. Open visits its URL. Logs shows output; Stop ends the tracked process."; color: #c9d1d9; font-size: 13px; wrap: word-wrap; }
+            Rectangle { vertical-stretch: 1; background: transparent; }
+            Rectangle { height: 54px; background: #0d1117; border-radius: 7px; border-width: 1px; border-color: #30363d;
+                Text { text: "Tip: your server must read the PORT environment variable."; color: #8b949e; font-size: 12px; vertical-alignment: center; x: 16px; }
+            }
+        }
+    }
+
+    if root.edit-visible: Rectangle {
+        x: 0px; y: 0px; width: parent.width; height: parent.height;
+        background: #010409bb;
+        TouchArea { clicked => { root.edit-visible = false; } }
+    }
+    if root.edit-visible: Rectangle {
+        x: 310px; y: 230px; width: parent.width - 620px; height: 280px;
+        background: #161b22; border-width: 1px; border-color: #30363d; border-radius: 12px;
+        VerticalLayout {
+            padding: 26px; spacing: 14px;
+            Text { text: "Run command · " + root.edit-branch; color: #f0f6fc; font-size: 20px; font-weight: 700; overflow: elide; }
+            Text { text: "This command is saved for this worktree only."; color: #8b949e; font-size: 12px; }
+            LineEdit { text <=> root.edit-command; height: 38px; }
+            Text { text: "Example: npm run dev"; color: #8b949e; font-size: 12px; }
+            Rectangle { vertical-stretch: 1; background: transparent; }
+            HorizontalLayout {
+                spacing: 10px;
+                Rectangle { width: 106px; height: 36px; background: #21262d; border-radius: 6px;
+                    Text { text: "Use default"; color: #c9d1d9; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                    TouchArea { clicked => { root.reset-lane-command(); } }
+                }
+                Rectangle { horizontal-stretch: 1; background: transparent; }
+                Rectangle { width: 86px; height: 36px; background: #21262d; border-radius: 6px;
+                    Text { text: "Cancel"; color: #c9d1d9; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                    TouchArea { clicked => { root.edit-visible = false; } }
+                }
+                Rectangle { width: 125px; height: 36px; background: #238636; border-radius: 6px;
+                    Text { text: "Save command"; color: white; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                    TouchArea { clicked => { root.save-lane-command(); } }
+                }
+            }
+        }
+    }
+
+    if root.setup-visible: Rectangle {
+        x: 0px; y: 0px; width: parent.width; height: parent.height;
+        background: #0d1117;
+        Rectangle {
+            x: 150px; y: 76px; width: parent.width - 300px; height: parent.height - 152px;
+            background: #161b22; border-width: 1px; border-color: #30363d; border-radius: 14px;
+            VerticalLayout {
+                padding: 44px; spacing: 20px;
+                Text { text: "LANES"; color: #f0f6fc; font-size: 24px; font-weight: 800; }
+                Text { text: "SETUP  " + (root.setup-step + 1) + " / 3"; color: #58a6ff; font-size: 11px; font-weight: 700; }
+                Rectangle { height: 1px; background: #30363d; }
+                if root.setup-step == 0: VerticalLayout {
+                    spacing: 16px;
+                    Text { text: "Run every branch."; color: #f0f6fc; font-size: 34px; font-weight: 700; }
+                    Text { text: "No port collisions."; color: #58a6ff; font-size: 34px; font-weight: 700; }
+                    Text { text: "Lanes discovers your Git worktrees and gives each one a stable local port. Let's connect your project in two quick steps."; color: #c9d1d9; font-size: 14px; wrap: word-wrap; }
+                }
+                if root.setup-step == 1: VerticalLayout {
+                    spacing: 16px;
+                    Text { text: "Where is your project?"; color: #f0f6fc; font-size: 30px; font-weight: 700; }
+                    Text { text: "Paste a path to any folder inside your Git repository."; color: #c9d1d9; font-size: 14px; }
+                    HorizontalLayout { spacing: 8px;
+                        LineEdit { text <=> root.project-path; height: 40px; horizontal-stretch: 1; }
+                        Rectangle { width: 96px; height: 40px; background: #21262d; border-radius: 6px;
+                            Text { text: "Browse…"; color: #c9d1d9; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                            TouchArea { clicked => { root.choose-project(); } }
+                        }
+                    }
+                }
+                if root.setup-step == 2: VerticalLayout {
+                    spacing: 16px;
+                    Text { text: "How do you start it?"; color: #f0f6fc; font-size: 30px; font-weight: 700; }
+                    Text { text: "Enter your usual dev command. You can customize it for each worktree later."; color: #c9d1d9; font-size: 14px; }
+                    LineEdit { text <=> root.command-text; height: 40px; }
+                    Text { text: "Lanes passes PORT, LANE and BASE_URL to this process."; color: #8b949e; font-size: 12px; }
+                }
+                Rectangle { vertical-stretch: 1; background: transparent; }
+                Text { text: root.setup-message; color: #f85149; font-size: 12px; }
+                HorizontalLayout {
+                    spacing: 10px;
+                    Rectangle { horizontal-stretch: 1; background: transparent; }
+                    if root.setup-step > 0: Rectangle { width: 86px; height: 38px; background: #21262d; border-radius: 6px;
+                        Text { text: "Back"; color: #c9d1d9; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                        TouchArea { clicked => { root.setup-step -= 1; root.setup-message = ""; } }
+                    }
+                    Rectangle { width: 132px; height: 38px; background: #238636; border-radius: 6px;
+                        Text { text: root.setup-step == 2 ? "Open Lanes" : "Continue"; color: white; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                        TouchArea { clicked => {
+                            if root.setup-step == 2 { root.finish-setup(); }
+                            else { root.setup-step += 1; root.setup-message = ""; }
+                        } }
+                    }
+                }
+            }
         }
     }
 }

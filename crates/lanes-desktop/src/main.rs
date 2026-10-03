@@ -3,15 +3,71 @@
 slint::include_modules!();
 
 use lanes_core::{data_dir, detect, discover, finish, launch, processes_alive, stop, Lane, Result};
+use serde::{Deserialize, Serialize};
 use slint::{ModelRc, Timer, TimerMode, VecModel};
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{ErrorKind, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Duration;
 
 const LOG_TAIL_BYTES: u64 = 64 * 1024;
 const LAST_PROJECT_FILE: &str = "desktop-project.txt";
+const SETTINGS_FILE: &str = "desktop-settings.json";
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
+struct DesktopSettings {
+    onboarding_complete: bool,
+    default_command: String,
+    commands: HashMap<String, String>,
+}
+
+impl Default for DesktopSettings {
+    fn default() -> Self {
+        Self {
+            onboarding_complete: false,
+            default_command: "npm run dev".into(),
+            commands: HashMap::new(),
+        }
+    }
+}
+
+fn settings_path() -> Result<PathBuf> {
+    Ok(data_dir()?.join(SETTINGS_FILE))
+}
+
+fn read_settings() -> Result<DesktopSettings> {
+    let path = settings_path()?;
+    if !path.exists() {
+        return Ok(DesktopSettings::default());
+    }
+    Ok(serde_json::from_slice(&fs::read(path)?)?)
+}
+
+fn write_settings(settings: &DesktopSettings) -> Result<()> {
+    let path = settings_path()?;
+    write_settings_to(&path, settings)
+}
+
+fn write_settings_to(path: &Path, settings: &DesktopSettings) -> Result<()> {
+    fs::create_dir_all(path.parent().expect("settings file has a parent"))?;
+    let temporary = path.with_extension("json.tmp");
+    fs::write(&temporary, serde_json::to_vec_pretty(settings)?)?;
+    fs::rename(temporary, path)?;
+    Ok(())
+}
+
+fn command_key(path: &str) -> String {
+    if cfg!(windows) {
+        path.to_lowercase()
+    } else {
+        path.to_owned()
+    }
+}
 
 enum Task {
     Refresh {
@@ -109,7 +165,12 @@ fn load_project(project: &str, remember: bool) -> Result<LoadedProject> {
     Ok(LoadedProject { lanes, save_error })
 }
 
-fn apply_loaded(ui: &AppWindow, project: &str, result: Result<LoadedProject>) -> bool {
+fn apply_loaded(
+    ui: &AppWindow,
+    project: &str,
+    result: Result<LoadedProject>,
+    settings: &DesktopSettings,
+) -> bool {
     if ui.get_project_path().as_str() != project {
         return false;
     }
@@ -130,6 +191,12 @@ fn apply_loaded(ui: &AppWindow, project: &str, result: Result<LoadedProject>) ->
                     running: active,
                     path: lane.path.to_string_lossy().into_owned().into(),
                     port: lane.port.into(),
+                    command: settings
+                        .commands
+                        .get(&command_key(&lane.path.to_string_lossy()))
+                        .cloned()
+                        .unwrap_or_else(|| settings.default_command.clone())
+                        .into(),
                 })
                 .collect::<Vec<_>>();
             ui.set_lanes(ModelRc::new(VecModel::from(rows)));
@@ -284,6 +351,9 @@ fn refresh_log(ui: &AppWindow) {
 
 fn main() -> Result<()> {
     let ui = AppWindow::new()?;
+    let settings = Rc::new(RefCell::new(read_settings()?));
+    ui.set_command_text(settings.borrow().default_command.clone().into());
+    ui.set_setup_visible(!settings.borrow().onboarding_complete);
     if let Some(path) = initial_project() {
         ui.set_project_path(path.to_string_lossy().into_owned().into());
     }
@@ -320,15 +390,163 @@ fn main() -> Result<()> {
 
     let weak = ui.as_weak();
     let sender = tasks.clone();
+    let stored = settings.clone();
     ui.on_run_lane(move |path| {
         if let Some(ui) = weak.upgrade() {
+            let command = stored
+                .borrow()
+                .commands
+                .get(&command_key(&path))
+                .cloned()
+                .unwrap_or_else(|| stored.borrow().default_command.clone());
             ui.set_message("Starting worktree...".into());
             ui.set_has_error(false);
             let _ = sender.send(Task::Run {
                 project: ui.get_project_path().to_string(),
                 path: path.to_string(),
-                command: ui.get_command_text().to_string(),
+                command,
             });
+        }
+    });
+
+    let weak = ui.as_weak();
+    let stored = settings.clone();
+    let sender = tasks.clone();
+    ui.on_save_default_command(move || {
+        if let Some(ui) = weak.upgrade() {
+            let value = ui.get_command_text().trim().to_string();
+            if value.is_empty() {
+                ui.set_message("Enter a run command before saving".into());
+                ui.set_has_error(true);
+                return;
+            }
+            if let Err(error) = split_command(&value) {
+                ui.set_message(format!("Invalid run command: {error}").into());
+                ui.set_has_error(true);
+                return;
+            }
+            let mut next = stored.borrow().clone();
+            next.default_command = value;
+            match write_settings(&next) {
+                Ok(()) => {
+                    *stored.borrow_mut() = next;
+                    ui.set_message("Default command saved".into());
+                    ui.set_has_error(false);
+                    request_refresh(&ui, &sender, false);
+                }
+                Err(error) => {
+                    ui.set_message(format!("Could not save settings: {error}").into());
+                    ui.set_has_error(true);
+                }
+            }
+        }
+    });
+
+    let weak = ui.as_weak();
+    let stored = settings.clone();
+    ui.on_edit_lane(move |path, branch| {
+        if let Some(ui) = weak.upgrade() {
+            let value = stored
+                .borrow()
+                .commands
+                .get(&command_key(&path))
+                .cloned()
+                .unwrap_or_else(|| stored.borrow().default_command.clone());
+            ui.set_edit_path(path);
+            ui.set_edit_branch(branch);
+            ui.set_edit_command(value.into());
+            ui.set_edit_visible(true);
+        }
+    });
+
+    let weak = ui.as_weak();
+    let stored = settings.clone();
+    let sender = tasks.clone();
+    ui.on_save_lane_command(move || {
+        if let Some(ui) = weak.upgrade() {
+            let value = ui.get_edit_command().trim().to_string();
+            if value.is_empty() {
+                ui.set_message("Enter a run command before saving".into());
+                ui.set_has_error(true);
+                return;
+            }
+            if let Err(error) = split_command(&value) {
+                ui.set_message(format!("Invalid run command: {error}").into());
+                ui.set_has_error(true);
+                return;
+            }
+            let mut next = stored.borrow().clone();
+            next.commands
+                .insert(command_key(&ui.get_edit_path()), value);
+            match write_settings(&next) {
+                Ok(()) => {
+                    *stored.borrow_mut() = next;
+                    ui.set_edit_visible(false);
+                    ui.set_message("Worktree command saved".into());
+                    ui.set_has_error(false);
+                    request_refresh(&ui, &sender, false);
+                }
+                Err(error) => {
+                    ui.set_message(format!("Could not save settings: {error}").into());
+                    ui.set_has_error(true);
+                }
+            }
+        }
+    });
+
+    let weak = ui.as_weak();
+    let stored = settings.clone();
+    let sender = tasks.clone();
+    ui.on_reset_lane_command(move || {
+        if let Some(ui) = weak.upgrade() {
+            let mut next = stored.borrow().clone();
+            next.commands.remove(&command_key(&ui.get_edit_path()));
+            match write_settings(&next) {
+                Ok(()) => {
+                    *stored.borrow_mut() = next;
+                    ui.set_edit_visible(false);
+                    ui.set_message("Worktree now uses the default command".into());
+                    ui.set_has_error(false);
+                    request_refresh(&ui, &sender, false);
+                }
+                Err(error) => {
+                    ui.set_message(format!("Could not save settings: {error}").into());
+                    ui.set_has_error(true);
+                }
+            }
+        }
+    });
+
+    let weak = ui.as_weak();
+    let stored = settings.clone();
+    let sender = tasks.clone();
+    ui.on_finish_setup(move || {
+        if let Some(ui) = weak.upgrade() {
+            let project = ui.get_project_path().trim().to_string();
+            if project.is_empty() || detect(Path::new(&project)).is_err() {
+                ui.set_setup_message("Choose a folder inside a Git repository".into());
+                return;
+            }
+            let command = ui.get_command_text().trim().to_string();
+            if command.is_empty() {
+                ui.set_setup_message("Enter the command that starts your project".into());
+                return;
+            }
+            if let Err(error) = split_command(&command) {
+                ui.set_setup_message(format!("Invalid command: {error}").into());
+                return;
+            }
+            {
+                let mut settings = stored.borrow_mut();
+                settings.default_command = command;
+                settings.onboarding_complete = true;
+                if let Err(error) = write_settings(&settings) {
+                    ui.set_setup_message(format!("Could not save setup: {error}").into());
+                    return;
+                }
+            }
+            ui.set_setup_visible(false);
+            request_refresh(&ui, &sender, true);
         }
     });
 
@@ -386,6 +604,7 @@ fn main() -> Result<()> {
     });
     let event_timer = Timer::default();
     let weak = ui.as_weak();
+    let stored = settings.clone();
     event_timer.start(TimerMode::Repeated, Duration::from_millis(100), move || {
         let Some(ui) = weak.upgrade() else {
             return;
@@ -397,7 +616,7 @@ fn main() -> Result<()> {
                     announce,
                     result,
                 } => {
-                    if apply_loaded(&ui, &project, result) {
+                    if apply_loaded(&ui, &project, result, &stored.borrow()) {
                         if announce {
                             ui.set_message("Worktrees refreshed".into());
                             ui.set_has_error(false);
@@ -413,7 +632,7 @@ fn main() -> Result<()> {
                     has_error,
                     result,
                 } => {
-                    if apply_loaded(&ui, &project, result) {
+                    if apply_loaded(&ui, &project, result, &stored.borrow()) {
                         ui.set_message(message.into());
                         ui.set_has_error(has_error);
                     }
@@ -427,7 +646,7 @@ fn main() -> Result<()> {
 
 #[cfg(all(test, windows))]
 mod tests {
-    use super::split_command;
+    use super::{split_command, write_settings_to, DesktopSettings};
 
     #[test]
     fn windows_command_paths_keep_backslashes_and_quoted_spaces() {
@@ -436,5 +655,17 @@ mod tests {
             args,
             [r"C:\Tools\server.exe", "--flag", r"C:\My Data\file.txt",]
         );
+    }
+
+    #[test]
+    fn settings_can_be_saved_more_than_once() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("settings.json");
+        let mut settings = DesktopSettings::default();
+        write_settings_to(&path, &settings).unwrap();
+        settings.default_command = "cargo run".into();
+        write_settings_to(&path, &settings).unwrap();
+        let saved: DesktopSettings = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        assert_eq!(saved.default_command, "cargo run");
     }
 }
