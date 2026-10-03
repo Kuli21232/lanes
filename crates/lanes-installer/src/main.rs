@@ -17,6 +17,7 @@ mod windows_installer {
 
     const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\Lanes";
     const MARKER: &str = "lanes-install-state.txt";
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
     enum Event {
         Progress(i32, String),
@@ -81,7 +82,7 @@ mod windows_installer {
         let script = "$s=New-Object -ComObject WScript.Shell; $l=$s.CreateShortcut($env:LANES_LINK); $l.TargetPath=$env:LANES_TARGET; $l.WorkingDirectory=$env:LANES_WORKDIR; $l.Description='Lanes - Run every branch'; $l.Save()";
         let status = Command::new("powershell.exe")
             .args(["-NoProfile", "-NonInteractive", "-Command", script])
-            .creation_flags(0x0800_0000)
+            .creation_flags(CREATE_NO_WINDOW)
             .env("LANES_LINK", link)
             .env("LANES_TARGET", target)
             .env("LANES_WORKDIR", target.parent().unwrap())
@@ -444,8 +445,24 @@ mod windows_installer {
 }
 
 #[cfg(windows)]
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    windows_installer::run()
+fn main() {
+    if let Err(error) = windows_installer::run() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
+        let message: Vec<u16> = format!("Lanes setup could not finish:\n{error}")
+            .encode_utf16()
+            .chain(Some(0))
+            .collect();
+        let title: Vec<u16> = "Lanes setup".encode_utf16().chain(Some(0)).collect();
+        unsafe {
+            MessageBoxW(
+                std::ptr::null_mut(),
+                message.as_ptr(),
+                title.as_ptr(),
+                MB_OK | MB_ICONERROR,
+            );
+        }
+        std::process::exit(1);
+    }
 }
 
 #[cfg(not(windows))]
