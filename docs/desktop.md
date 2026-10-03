@@ -16,14 +16,15 @@ Git must be installed and available on `PATH`. You can pass a repository directo
 lanes-desktop /path/to/project
 ```
 
-Without an argument, the app uses its current directory if it is a Git repository, then the last successfully opened project. On first launch from a release folder, choose a repository with **Browse…** or paste its path into **Project directory** and click **Refresh**. The app remembers that directory for the next launch.
+Without an argument, the app uses its current directory if it is a Git repository, then the last successfully opened project. On first launch, a three-step setup asks for a repository path and default command. You can type the path if the folder picker is slow. The app remembers the directory for the next launch. **Quick guide** in the sidebar explains the basic workflow at any time.
 
 ## Controls
 
 | Control | Action |
 | --- | --- |
 | **Project directory** | Choose any folder inside a Git repository. Lanes discovers its worktrees through Git. |
-| **Run command** | Command and arguments used by **Run** for any worktree row; defaults to `npm run dev`. |
+| **Run command** | Default command for worktrees without an override. Click **Save** to persist it; defaults to `npm run dev`. |
+| **Edit** | Save a command for one worktree. **Use default** removes its override. These choices persist across app restarts. |
 | **Refresh** | Reload worktrees and tracked process state in the background. The app also refreshes automatically every four seconds. |
 | **Run** | Start the command in that worktree's root directory with its lane environment. |
 | **Stop** | Stop the tracked command for that worktree. |

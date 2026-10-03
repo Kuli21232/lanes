@@ -21,7 +21,7 @@ Lanes includes a Rust CLI and a native desktop app built with [Slint](https://sl
 
 Русская краткая инструкция: [docs/ru/README.md](docs/ru/README.md).
 
-1. Download the archive for your machine from [Releases](https://github.com/Kuli21232/lanes/releases/latest): Windows x64, Linux x64, or macOS Apple Silicon. Extract it and add that directory to your `PATH` for the commands below. You can also call the extracted binary directly (`./lanes` on Linux/macOS, `.\lanes.exe` in PowerShell). Each archive also contains `lanes-desktop`.
+1. On Windows, download **`lanes-setup-windows-x64.exe`** from [Releases](https://github.com/Kuli21232/lanes/releases/latest) and follow the installer. It installs the desktop app and CLI, creates a Start menu shortcut, and can add `lanes` to your user `PATH`. On Linux and macOS, download the matching archive and add its extracted directory to `PATH`. The Windows ZIP remains available for portable use. See the [Windows installer guide](docs/installer.md).
 2. In a Git repository, start your project in one terminal:
 
    ```sh
@@ -65,7 +65,7 @@ Launch `lanes-desktop` from the extracted archive, or build and run it from sour
 cargo run -p lanes-desktop
 ```
 
-Choose a folder inside your repository or launch `lanes-desktop /path/to/project`. The app remembers the last opened project and lists its worktrees and URLs. Set a run command, then use **Run**, **Stop**, **Logs**, and **Open** on each row. It refreshes process state every four seconds. Commands launched from the desktop app run from the worktree root; CLI commands run from the directory where you invoke `lanes`.
+On first launch, a three-step setup asks for your Git repository and default run command. The app remembers the project and lists its worktrees and URLs. Use **Edit** on a row to save a different command for that worktree; **Quick guide** stays available in the sidebar. Then use **Run**, **Stop**, **Logs**, and **Open** on each row. Process state refreshes every four seconds. Desktop commands run from the worktree root; CLI commands run from the directory where you invoke `lanes`.
 
 See the [desktop guide](docs/desktop.md) for controls, command parsing, and log locations.
 

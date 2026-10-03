@@ -36,6 +36,12 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxcb1-dev libfontconfig1-dev libfreetype6-dev
       - run: cargo build --release -p lanes-core -p lanes-desktop
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          LANES_PAYLOAD_DIR: ${{ github.workspace }}/target/release
+        run: cargo build --release -p lanes-installer --features bundled
       - name: Package Windows binaries
         if: runner.os == 'Windows'
         shell: pwsh
@@ -49,3 +55,12 @@ jobs:
           GH_REPO: ${{ github.repository }}
         shell: bash
         run: gh release upload "$GITHUB_REF_NAME" "${{ matrix.archive }}" --clobber
+      - name: Upload Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          Copy-Item target/release/lanes-installer.exe lanes-setup-windows-x64.exe
+          gh release upload $env:GITHUB_REF_NAME lanes-setup-windows-x64.exe --clobber
